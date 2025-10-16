@@ -1,0 +1,85 @@
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { LogOut, Settings2 } from 'lucide-react'
+import useDialogState from '@/hooks/use-dialog-state'
+import { SignOutDialog } from '@/components/sign-out-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { profileQueryFn } from '@/lib/profile'
+import { useAuthStore } from '@/stores/auth-store'
+
+export function UserMenu() {
+  const [open, setOpen] = useDialogState<boolean>()
+  const { auth } = useAuthStore()
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: profileQueryFn,
+    enabled: Boolean(auth.accessToken),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const displayName = profile?.nickname || profile?.username || '用户'
+  const fallbackAvatar = profile?.is_admin ? '/images/admin-avatar.webp' : '/images/user-avatar.png'
+  const avatarSrc = profile?.avatar_url?.trim() ? profile.avatar_url.trim() : fallbackAvatar
+  const fallbackText = displayName.slice(0, 2)
+  const emailText = profile?.email?.trim()
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant='ghost'
+            size='sm'
+            className='rounded-full px-2 sm:px-3'
+          >
+            <span className='sr-only'>用户菜单</span>
+            <Avatar className='size-8'>
+              <AvatarImage src={avatarSrc} alt={displayName} />
+              <AvatarFallback>{fallbackText || '用户'}</AvatarFallback>
+            </Avatar>
+            <span className='hidden sm:inline-block ps-2'>
+              {displayName}
+            </span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align='end' className='w-56 space-y-3 p-4'>
+          <div className='flex flex-col items-center gap-2 text-center'>
+            <Avatar className='size-12'>
+              <AvatarImage src={avatarSrc} alt={displayName} />
+              <AvatarFallback>{fallbackText || '用户'}</AvatarFallback>
+            </Avatar>
+            <div className='space-y-1'>
+              <p className='text-sm font-semibold leading-tight'>{displayName}</p>
+              <p className='text-xs text-muted-foreground'>{profile?.username || '未登录'}</p>
+              {emailText ? (
+                <p className='text-xs text-muted-foreground break-all'>{emailText}</p>
+              ) : (
+                <p className='text-xs text-muted-foreground'>未填写邮箱</p>
+              )}
+            </div>
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild className='cursor-pointer justify-center'>
+            <Link to='/settings' className='flex items-center gap-2'>
+              <Settings2 className='size-4' /> 个人设置
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setOpen(true)} className='cursor-pointer justify-center'>
+            <LogOut className='size-4' /> 退出登录
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <SignOutDialog open={Boolean(open)} onOpenChange={(value) => setOpen(value)} />
+    </>
+  )
+}

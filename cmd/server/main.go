@@ -1,0 +1,212 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"traffic-info/internal/auth"
+	"traffic-info/internal/handler"
+	"traffic-info/internal/storage"
+	"traffic-info/internal/web"
+	"traffic-info/subscribes"
+)
+
+const version = "0.0.2"
+
+func main() {
+	addr := getAddr()
+
+	repo, err := storage.NewTrafficRepository(filepath.Join("data", "traffic.db"))
+	if err != nil {
+		log.Fatalf("failed to initialize traffic repository: %v", err)
+	}
+	defer repo.Close()
+
+	authManager, err := auth.NewManager(repo)
+	if err != nil {
+		log.Fatalf("failed to load auth manager: %v", err)
+	}
+
+	tokenStore := auth.NewTokenStore(24 * time.Hour)
+
+	// Load persisted sessions from database
+	ctx := context.Background()
+	sessions, err := repo.LoadSessions(ctx)
+	if err != nil {
+		log.Printf("warning: failed to load sessions from database: %v", err)
+	} else {
+		for _, session := range sessions {
+			tokenStore.LoadSession(session.Token, session.Username, session.ExpiresAt)
+		}
+		log.Printf("loaded %d persisted sessions from database", len(sessions))
+	}
+
+	// Cleanup expired sessions from database
+	if err := repo.CleanupExpiredSessions(ctx); err != nil {
+		log.Printf("warning: failed to cleanup expired sessions: %v", err)
+	}
+
+	subscribeDir := filepath.Join("subscribes")
+	if err := subscribes.Ensure(subscribeDir); err != nil {
+		log.Fatalf("failed to prepare subscription files: %v", err)
+	}
+
+	ensureDefaultSubscriptions(repo)
+
+	trafficHandler := handler.NewTrafficSummaryHandler(repo)
+	userRepo := auth.NewRepositoryAdapter(repo)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/setup/status", handler.NewSetupStatusHandler(repo))
+	mux.Handle("/api/setup/init", handler.NewInitialSetupHandler(repo))
+	mux.Handle("/api/login", handler.NewLoginHandler(authManager, tokenStore, repo))
+
+	// Admin-only endpoints
+	mux.Handle("/api/admin/credentials", auth.RequireAdmin(tokenStore, userRepo, handler.NewCredentialsHandler(authManager, tokenStore)))
+	mux.Handle("/api/admin/users", auth.RequireAdmin(tokenStore, userRepo, handler.NewUserListHandler(repo)))
+	mux.Handle("/api/admin/users/create", auth.RequireAdmin(tokenStore, userRepo, handler.NewUserCreateHandler(repo)))
+	mux.Handle("/api/admin/users/status", auth.RequireAdmin(tokenStore, userRepo, handler.NewUserStatusHandler(repo)))
+	mux.Handle("/api/admin/users/reset-password", auth.RequireAdmin(tokenStore, userRepo, handler.NewUserResetPasswordHandler(repo)))
+	mux.Handle("/api/admin/subscriptions", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscriptionAdminHandler(subscribeDir, repo)))
+	mux.Handle("/api/admin/subscriptions/", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscriptionAdminHandler(subscribeDir, repo)))
+	mux.Handle("/api/admin/probe-config", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeConfigHandler(repo)))
+	mux.Handle("/api/rules/", auth.RequireAdmin(tokenStore, userRepo, http.StripPrefix("/api/rules/", handler.NewRuleEditorHandler(subscribeDir, repo))))
+
+	// User endpoints (all authenticated users)
+	mux.Handle("/api/user/password", auth.RequireToken(tokenStore, handler.NewPasswordHandler(authManager)))
+	mux.Handle("/api/user/profile", auth.RequireToken(tokenStore, handler.NewProfileHandler(repo)))
+	mux.Handle("/api/user/settings", auth.RequireToken(tokenStore, handler.NewUserSettingsHandler(repo, tokenStore)))
+	mux.Handle("/api/user/token", auth.RequireToken(tokenStore, handler.NewUserTokenHandler(repo)))
+	mux.Handle("/api/traffic/summary", auth.RequireToken(tokenStore, trafficHandler))
+	mux.Handle("/api/subscriptions", auth.RequireToken(tokenStore, handler.NewSubscriptionListHandler(repo)))
+	mux.Handle("/api/rules/latest", auth.RequireToken(tokenStore, handler.NewRuleMetadataHandler(subscribeDir, repo)))
+	mux.Handle("/api/clash/subscribe", handler.NewSubscriptionEndpoint(tokenStore, repo, subscribeDir))
+	mux.Handle("/", web.Handler())
+
+	allowedOrigins := getAllowedOrigins()
+	handlerWithCORS := withCORS(mux, allowedOrigins)
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handlerWithCORS,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	collectorCtx, stopCollector := context.WithCancel(context.Background())
+	go startTrafficCollector(collectorCtx, trafficHandler)
+
+	go func() {
+		log.Printf("Traffic-Info Server v%s - HTTP server listening on %s", version, addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("http server failed: %v", err)
+		}
+	}()
+
+	waitForShutdown(srv, stopCollector)
+}
+
+func getAddr() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	return ":" + port
+}
+
+func waitForShutdown(srv *http.Server, stopCollector context.CancelFunc) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	<-sigCh
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stopCollector()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	}
+}
+
+func startTrafficCollector(ctx context.Context, trafficHandler *handler.TrafficSummaryHandler) {
+	if trafficHandler == nil {
+		return
+	}
+
+	run := func() {
+		runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		if err := trafficHandler.RecordDailyUsage(runCtx); err != nil {
+			log.Printf("daily traffic collection failed: %v", err)
+		}
+	}
+
+	run()
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+func ensureDefaultSubscriptions(repo *storage.TrafficRepository) {
+	if repo == nil {
+		return
+	}
+
+	defaults := []storage.SubscriptionLink{
+		{
+			Name:         "clash",
+			Type:         "clash",
+			Description:  "推荐用于 Clash Mobile 客户端的规则与订阅配置。",
+			RuleFilename: "subscribe.yaml",
+			Buttons:      []string{storage.SubscriptionButtonQR, storage.SubscriptionButtonCopy, storage.SubscriptionButtonImport},
+		},
+		{
+			Name:         "openclash-redirhost",
+			Type:         "openclash-redirhost",
+			Description:  "适用于 OpenClash Redir-Host 模式的进阶订阅。",
+			RuleFilename: "subscribe-openclash-redirhost.yaml",
+			Buttons:      []string{storage.SubscriptionButtonQR, storage.SubscriptionButtonCopy, storage.SubscriptionButtonImport},
+		},
+		{
+			Name:         "openclash-fakeip",
+			Type:         "openclash-fakeip",
+			Description:  "提供给 OpenClash Fake-IP 模式的最新规则集合。",
+			RuleFilename: "subscribe-openclash-fakeip.yaml",
+			Buttons:      []string{storage.SubscriptionButtonQR, storage.SubscriptionButtonCopy, storage.SubscriptionButtonImport},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for _, item := range defaults {
+		if _, err := repo.GetSubscriptionByName(ctx, item.Name); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrSubscriptionNotFound) {
+			log.Printf("failed to ensure subscription %s: %v", item.Name, err)
+			continue
+		}
+
+		if _, err := repo.CreateSubscriptionLink(ctx, item); err != nil {
+			log.Printf("failed to create default subscription %s: %v", item.Name, err)
+		}
+	}
+}
