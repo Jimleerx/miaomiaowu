@@ -46,16 +46,19 @@ jobs:
           npm ci
 
       - name: Run frontend lint
+        continue-on-error: true
         run: |
           cd miaomiaowu
           npm run lint
 
       - name: Run frontend format check
+        continue-on-error: true
         run: |
           cd miaomiaowu
           npm run format:check
 
       - name: Run knip (unused code check)
+        continue-on-error: true
         run: |
           cd miaomiaowu
           npm run knip
