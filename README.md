@@ -22,10 +22,10 @@
 账户/密码: test / test123
 
 ### 页面截图
-![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic-info.png)  
-![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe-url.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic_info.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_url.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/probe_datasource.png)  
-![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_manager.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_manage.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/rules_file_edit.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/user_manage.png)
 ### 技术特点
