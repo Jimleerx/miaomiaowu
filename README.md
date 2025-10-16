@@ -29,8 +29,7 @@
 **自动安装为 systemd 服务（Debian/Ubuntu）：**
 ```bash
 # 下载并运行安装脚本
-wget https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh
-sudo bash install.sh
+curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh | bash
 ```
 
 安装完成后，服务将自动启动，访问 `http://服务器IP:8080` 即可。
@@ -38,8 +37,7 @@ sudo bash install.sh
 **简易安装（手动运行）：**
 ```bash
 # 一键下载安装
-wget https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh
-bash quick-install.sh
+curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh | bash
 
 # 运行服务
 ./traffic-info
