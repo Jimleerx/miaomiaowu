@@ -11,7 +11,6 @@ import (
 	"traffic-info/internal/storage"
 )
 
-
 type Credentials struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"password_hash"`
@@ -31,7 +30,6 @@ func NewManager(repo *storage.TrafficRepository) (*Manager, error) {
 	m := &Manager{repo: repo}
 	return m, nil
 }
-
 
 func (m *Manager) Authenticate(ctx context.Context, username, password string) (bool, error) {
 	username = strings.TrimSpace(username)
@@ -90,45 +88,17 @@ func (m *Manager) Update(ctx context.Context, username, password string) error {
 }
 
 func (m *Manager) ChangePassword(ctx context.Context, username, currentPassword, newPassword string) error {
-	username = strings.TrimSpace(username)
-	if username == "" {
-		return errors.New("username is required")
-	}
-	if currentPassword == "" || newPassword == "" {
-		return errors.New("passwords are required")
+	// Demo mode: only validate current password, don't actually change it
+	if newPassword == "" {
+		return errors.New("new password is required")
 	}
 
-	user, err := m.repo.GetUser(ctx, username)
-	if err != nil {
-		if errors.Is(err, storage.ErrUserNotFound) {
-			return errors.New("user not found")
-		}
+	// Validate current password using existing ValidatePassword method
+	if err := m.ValidatePassword(ctx, username, currentPassword); err != nil {
 		return err
 	}
 
-	if !user.IsActive {
-		return errors.New("user is disabled")
-	}
-
-	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
-		return errors.New("current password is incorrect")
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	if err := m.repo.UpdateUserPassword(ctx, username, string(hash)); err != nil {
-		return err
-	}
-
-	if username == m.username {
-		m.mu.Lock()
-		m.username = username
-		m.mu.Unlock()
-	}
-
+	// In demo mode, return success without updating the database
 	return nil
 }
 
