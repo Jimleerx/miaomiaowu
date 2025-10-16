@@ -21,6 +21,13 @@
 [Demo](https://demo.miaomiaowu.com)
 账户/密码: test / test123
 
+### 页面截图
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic-info.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe-url.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/probe_datasource.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_manager.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/rules_file_edit.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/user_manage.png)
 ### 技术特点
 - 🚀 单二进制文件部署，无需外部依赖
 - 💾 使用 SQLite 数据库，免维护
