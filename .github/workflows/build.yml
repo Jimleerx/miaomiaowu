@@ -1,0 +1,161 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+      - open
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - open
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: miaomiaowu/package-lock.json
+
+      - name: Go mod verify
+        run: go mod verify
+
+      - name: Go mod download
+        run: go mod download
+
+      - name: Install frontend dependencies
+        run: |
+          cd miaomiaowu
+          npm ci
+
+      - name: Run frontend lint
+        run: |
+          cd miaomiaowu
+          npm run lint
+
+      - name: Run frontend format check
+        run: |
+          cd miaomiaowu
+          npm run format:check
+
+      - name: Run knip (unused code check)
+        run: |
+          cd miaomiaowu
+          npm run knip
+
+  build:
+    name: Build Binaries
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            output: traffic-info-linux-amd64
+          - goos: windows
+            goarch: amd64
+            output: traffic-info-windows-amd64.exe
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: miaomiaowu/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd miaomiaowu
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd miaomiaowu
+          npm run build
+
+      - name: Build backend
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath -ldflags="-s -w" -o build/${{ matrix.output }} ./cmd/server
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: build/${{ matrix.output }}
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: traffic-info-linux-amd64
+          path: release
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: traffic-info-windows-amd64.exe
+          path: release
+
+      - name: Add executable permissions
+        run: chmod +x release/traffic-info-linux-amd64
+
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum traffic-info-linux-amd64 > checksums.txt
+          sha256sum traffic-info-windows-amd64.exe >> checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/traffic-info-linux-amd64
+            release/traffic-info-windows-amd64.exe
+            release/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
