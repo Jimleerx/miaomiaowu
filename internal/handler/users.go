@@ -156,6 +156,22 @@ func NewUserResetPasswordHandler(repo *storage.TrafficRepository) http.Handler {
 			return
 		}
 
+		// Check if target user is admin
+		targetUser, err := repo.GetUser(r.Context(), username)
+		if err != nil {
+			if errors.Is(err, storage.ErrUserNotFound) {
+				writeError(w, http.StatusNotFound, errors.New("user not found"))
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		if targetUser.Role == storage.RoleAdmin {
+			writeError(w, http.StatusBadRequest, errors.New("不能重置管理员密码"))
+			return
+		}
+
 		newPassword := strings.TrimSpace(payload.NewPassword)
 		if newPassword == "" {
 			generated, err := generateRandomPassword(12)

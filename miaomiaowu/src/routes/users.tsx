@@ -262,19 +262,23 @@ function UsersPage() {
                           />
                         </TableCell>
                         <TableCell className='text-right'>
-                          <Button
-                            size='sm'
-                            variant='outline'
-                            disabled={resetMutation.isPending}
-                            onClick={() =>
-                              setResetState({
-                                username: user.username,
-                                password: generatePassword(),
-                              })
-                            }
-                          >
-                            重置密码
-                          </Button>
+                          {isAdminRow ? (
+                            <span className='text-sm text-muted-foreground'>—</span>
+                          ) : (
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              disabled={resetMutation.isPending}
+                              onClick={() =>
+                                setResetState({
+                                  username: user.username,
+                                  password: generatePassword(),
+                                })
+                              }
+                            >
+                              重置密码
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
