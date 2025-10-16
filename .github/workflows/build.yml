@@ -18,9 +18,6 @@ jobs:
     name: Lint and Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -74,9 +71,6 @@ jobs:
             goarch: amd64
             output: traffic-info-windows-amd64.exe
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -123,9 +117,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
