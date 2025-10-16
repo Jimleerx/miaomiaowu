@@ -17,6 +17,10 @@
 - [DStatus](https://github.com/DokiDoki1103/dstatus) 监控
 - [Komari](https://github.com/missuo/komari) 面板
 
+### 体验demo
+[Demo](https://demo.miaomiaowu.com)
+账户/密码: test / test123
+
 ### 技术特点
 - 🚀 单二进制文件部署，无需外部依赖
 - 💾 使用 SQLite 数据库，免维护
