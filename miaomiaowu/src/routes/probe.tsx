@@ -10,7 +10,6 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { profileQueryFn } from '@/lib/profile'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
-const BYTES_PER_GB = 1024 ** 3
 
 import {
   Card,
@@ -254,227 +253,51 @@ function ProbeManagePage() {
   const trimAddress = () => formState.address.trim().replace(/\/$/, '')
 
   const fetchDstatusServers = async (baseURL: string): Promise<ServerForm[]> => {
-    const serversResp = await fetch(`${baseURL}/api/servers`)
-    if (!serversResp.ok) {
-      throw new Error('服务器接口返回异常')
-    }
-
-    const serversJson = await serversResp.json()
-      const serverList: Array<any> = Array.isArray(serversJson?.data) ? serversJson.data : []
-    if (serverList.length === 0) {
-      return []
-    }
-
-    const serverIds = serverList
-      .map((item) => `${item?.id ?? ''}`.trim())
-      .filter((id) => id)
-
-    let usageMap: Record<string, any> = {}
-    if (serverIds.length > 0) {
-      try {
-        const statsResp = await fetch(`${baseURL}/stats/batch-traffic`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ serverIds }),
-        })
-        if (statsResp.ok) {
-          const statsJson = await statsResp.json()
-          if (statsJson?.data && typeof statsJson.data === 'object') {
-            usageMap = statsJson.data as Record<string, any>
-          }
-        }
-      } catch (_) {
-        // ignore stats fetch errors
-      }
-    }
-
-    return serverList.map((server, index) => {
-      const id = `${server?.id ?? ''}`.trim()
-      const usageEntry = id ? usageMap[id] : undefined
-      let monthly = 0
-      const limitValue =
-        usageEntry?.monthly?.limit ??
-        usageEntry?.limit ??
-        usageEntry?.Monthly?.Limit ??
-        usageEntry?.Monthly?.limit
-      if (typeof limitValue === 'number') {
-        monthly = Math.max(0, Math.round((limitValue / BYTES_PER_GB) * 100) / 100)
-      } else if (typeof limitValue === 'string') {
-        const parsed = Number(limitValue)
-        if (!Number.isNaN(parsed)) {
-          monthly = Math.max(0, Math.round((parsed / BYTES_PER_GB) * 100) / 100)
-        }
-      }
-
-      return {
-        key: `${id || 'server'}-${index}-${generateKey()}`,
-        server_id: id,
-        name: `${server?.name ?? ''}`.trim() || `服务器 ${index + 1}`,
-        traffic_method: 'both',
-        monthly_traffic_gb: monthly,
-      }
+    const response = await api.post('/api/admin/probe-sync', {
+      probe_type: 'dstatus',
+      address: baseURL,
     })
+
+    const servers: Array<any> = response.data?.servers ?? []
+    return servers.map((server, index) => ({
+      key: `${server.server_id || 'server'}-${index}-${generateKey()}`,
+      server_id: server.server_id ?? '',
+      name: server.name ?? `服务器 ${index + 1}`,
+      traffic_method: server.traffic_method ?? 'both',
+      monthly_traffic_gb: server.monthly_traffic_gb ?? 0,
+    }))
   }
 
   const fetchNezhaServers = async (baseURL: string): Promise<ServerForm[]> => {
-    if (typeof window === 'undefined' || typeof WebSocket === 'undefined') {
-      throw new Error('当前环境不支持 WebSocket 同步')
-    }
-
-    let socket: WebSocket | null = null
-    let timer: number | null = null
-
-    const stopTimer = () => {
-      if (timer !== null) {
-        window.clearTimeout(timer)
-        timer = null
-      }
-    }
-
-    return new Promise<ServerForm[]>((resolve, reject) => {
-      let finished = false
-
-      const finish = (error?: Error, data: ServerForm[] = []) => {
-        if (finished) {
-          return
-        }
-        finished = true
-        stopTimer()
-        if (socket && socket.readyState === WebSocket.OPEN) {
-          socket.close()
-        }
-        socket = null
-        if (error) {
-          reject(error)
-        } else {
-          resolve(data)
-        }
-      }
-
-      let targetURL: URL
-      try {
-        targetURL = new URL('/api/v1/ws/server', baseURL)
-      } catch (_) {
-        finish(new Error('探针地址不合法'))
-        return
-      }
-      targetURL.protocol = targetURL.protocol === 'https:' ? 'wss:' : 'ws:'
-
-      try {
-        socket = new WebSocket(targetURL.toString())
-      } catch (_) {
-        finish(new Error('无法连接到 WebSocket 接口'))
-        return
-      }
-
-      socket.onopen = () => {
-        stopTimer()
-        timer = window.setTimeout(() => {
-          finish(new Error('未在期望时间内收到服务器数据'))
-        }, 5000)
-      }
-
-      socket.onmessage = async (event) => {
-        try {
-          let raw: string
-          if (typeof event.data === 'string') {
-            raw = event.data
-          } else if (event.data instanceof Blob) {
-            raw = await event.data.text()
-          } else if (event.data instanceof ArrayBuffer) {
-            raw = new TextDecoder().decode(event.data)
-          } else {
-            finish(new Error('WebSocket 返回数据格式不支持'))
-            return
-          }
-
-          const parsed = JSON.parse(raw)
-          const snapshot = Array.isArray(parsed)
-            ? parsed[parsed.length - 1] ?? {}
-            : parsed ?? {}
-          const serversPayload: Array<any> = Array.isArray(snapshot?.servers)
-            ? snapshot.servers
-            : []
-
-          if (serversPayload.length === 0) {
-            finish(new Error('探针未返回任何服务器数据'))
-            return
-          }
-
-          const mapped = serversPayload.map((server, index) => {
-            let cleanId = ''
-            if (server?.id !== undefined && server?.id !== null) {
-              cleanId = String(server.id).trim()
-            } else if (server?.server_id !== undefined && server?.server_id !== null) {
-              cleanId = String(server.server_id).trim()
-            }
-
-            const name =
-              server && typeof server === 'object' && typeof server.name === 'string'
-                ? server.name.trim()
-                : `服务器 ${index + 1}`
-
-            return {
-              key: `${cleanId || 'server'}-${index}-${generateKey()}`,
-              server_id: cleanId,
-              name,
-              traffic_method: 'both',
-              monthly_traffic_gb: null,
-            }
-          })
-
-          finish(undefined, mapped)
-        } catch (_) {
-          finish(new Error('解析探针返回数据失败'))
-        }
-      }
-
-      socket.onerror = () => {
-        finish(new Error('WebSocket 连接出错'))
-      }
-
-      socket.onclose = () => {
-        finish(new Error('未收到服务器数据，连接已关闭'))
-      }
+    const response = await api.post('/api/admin/probe-sync', {
+      probe_type: 'nezha',
+      address: baseURL,
     })
+
+    const servers: Array<any> = response.data?.servers ?? []
+    return servers.map((server, index) => ({
+      key: `${server.server_id || 'server'}-${index}-${generateKey()}`,
+      server_id: server.server_id ?? '',
+      name: server.name ?? `服务器 ${index + 1}`,
+      traffic_method: server.traffic_method ?? 'both',
+      monthly_traffic_gb: server.monthly_traffic_gb ?? null,
+    }))
   }
 
   const fetchKomariServers = async (baseURL: string): Promise<ServerForm[]> => {
-    const response = await fetch(`${baseURL}/api/nodes`)
-    if (!response.ok) {
-      throw new Error('服务器接口返回异常')
-    }
-
-    const payload = await response.json()
-    const list: Array<any> = Array.isArray(payload?.data) ? payload.data : []
-    if (list.length === 0) {
-      return []
-    }
-
-    return list.map((item, index) => {
-      const id = `${item?.uuid ?? ''}`.trim()
-      const name = `${item?.name ?? ''}`.trim() || `服务器 ${index + 1}`
-      const trafficLimitRaw = item?.traffic_limit
-      let monthly: number | null = null
-
-      if (trafficLimitRaw !== undefined && trafficLimitRaw !== null) {
-        const parsed = Number(trafficLimitRaw)
-        if (Number.isFinite(parsed) && parsed > 0) {
-          monthly = parsed
-        }
-      }
-
-      return {
-        key: `${id || 'server'}-${index}-${generateKey()}`,
-        server_id: id,
-        name,
-        traffic_method: 'both',
-        monthly_traffic_gb: monthly,
-      }
+    const response = await api.post('/api/admin/probe-sync', {
+      probe_type: 'komari',
+      address: baseURL,
     })
+
+    const servers: Array<any> = response.data?.servers ?? []
+    return servers.map((server, index) => ({
+      key: `${server.server_id || 'server'}-${index}-${generateKey()}`,
+      server_id: server.server_id ?? '',
+      name: server.name ?? `服务器 ${index + 1}`,
+      traffic_method: server.traffic_method ?? 'both',
+      monthly_traffic_gb: server.monthly_traffic_gb ?? null,
+    }))
   }
 
   const handleSyncServers = async () => {

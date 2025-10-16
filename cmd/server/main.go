@@ -77,6 +77,7 @@ func main() {
 	mux.Handle("/api/admin/subscriptions", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscriptionAdminHandler(subscribeDir, repo)))
 	mux.Handle("/api/admin/subscriptions/", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscriptionAdminHandler(subscribeDir, repo)))
 	mux.Handle("/api/admin/probe-config", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeConfigHandler(repo)))
+	mux.Handle("/api/admin/probe-sync", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeSyncHandler(repo)))
 	mux.Handle("/api/rules/", auth.RequireAdmin(tokenStore, userRepo, http.StripPrefix("/api/rules/", handler.NewRuleEditorHandler(subscribeDir, repo))))
 
 	// User endpoints (all authenticated users)
