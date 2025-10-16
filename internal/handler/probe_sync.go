@@ -235,7 +235,7 @@ func (h *probeSyncHandler) fetchDstatusServers(ctx context.Context, address stri
 
 	var serversResp struct {
 		Data []struct {
-			ID   json.Number `json:"id"`
+			ID   interface{} `json:"id"`
 			Name string      `json:"name"`
 		} `json:"data"`
 	}
@@ -255,7 +255,22 @@ func (h *probeSyncHandler) fetchDstatusServers(ctx context.Context, address stri
 	serverMap := make(map[string]string)
 
 	for _, item := range serversResp.Data {
-		id := strings.TrimSpace(item.ID.String())
+		var id string
+		switch v := item.ID.(type) {
+		case string:
+			id = strings.TrimSpace(v)
+		case json.Number:
+			id = strings.TrimSpace(v.String())
+		case float64:
+			id = strconv.FormatInt(int64(v), 10)
+		case int:
+			id = strconv.Itoa(v)
+		case int64:
+			id = strconv.FormatInt(v, 10)
+		default:
+			id = fmt.Sprintf("%v", v)
+		}
+
 		if id == "" {
 			continue
 		}
