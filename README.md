@@ -18,8 +18,55 @@
 - [Komari](https://github.com/missuo/komari) 面板
 
 ### 体验demo
-[Demo](https://demo.miaomiaowu.com)
+[Demo](https://demo.miaomiaowu.com)  
 账户/密码: test / test123
+
+
+### 安装部署
+
+#### 方式 1：一键安装（推荐 - Linux）
+
+**自动安装为 systemd 服务（Debian/Ubuntu）：**
+```bash
+# 下载并运行安装脚本
+wget https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh
+sudo bash install.sh
+```
+
+安装完成后，服务将自动启动，访问 `http://服务器IP:8080` 即可。
+
+**简易安装（手动运行）：**
+```bash
+# 一键下载安装
+wget https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh
+bash quick-install.sh
+
+# 运行服务
+./traffic-info
+```
+
+#### 方式 2：手动安装
+
+**Linux：**
+```bash
+# 下载二进制文件（修改版本号为所需版本）
+wget https://github.com/Jimleerx/miaomiaowu/releases/download/v0.0.2/traffic-info-linux-amd64
+
+# 添加执行权限
+chmod +x traffic-info-linux-amd64
+
+# 运行
+./traffic-info-linux-amd64
+```
+
+**Windows：**
+```powershell
+# 从 Releases 页面下载 traffic-info-windows-amd64.exe
+# https://github.com/Jimleerx/miaomiaowu/releases
+
+# 双击运行或在命令行中执行
+.\traffic-info-windows-amd64.exe
+```
 
 ### 页面截图
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic_info.png)  
