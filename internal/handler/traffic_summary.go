@@ -362,84 +362,68 @@ func (h *TrafficSummaryHandler) fetchKomariTotals(ctx context.Context, cfg stora
 		return 0, 0, 0, fmt.Errorf("invalid probe address: %w", err)
 	}
 
-	switch strings.ToLower(base.Scheme) {
-	case "", "http":
-		base.Scheme = "ws"
-	case "https":
-		base.Scheme = "wss"
-	case "ws", "wss":
-		// keep as is
-	default:
-		base.Scheme = "wss"
-	}
-
-	endpoint := &url.URL{Path: "/api/clients"}
+	endpoint := &url.URL{Path: "/api/rpc2"}
 	target := base.ResolveReference(endpoint)
 
-	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	// Prepare JSON-RPC request
+	rpcRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "common:getNodesLatestStatus",
+		"id":      3,
+	}
 
-	conn, resp, err := websocket.DefaultDialer.DialContext(dialCtx, target.String(), nil)
+	requestBody, err := json.Marshal(rpcRequest)
 	if err != nil {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		return 0, 0, 0, fmt.Errorf("connect komari websocket: %w", err)
-	}
-	defer conn.Close()
-
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		return 0, 0, 0, fmt.Errorf("set websocket deadline: %w", err)
+		return 0, 0, 0, fmt.Errorf("marshal komari request: %w", err)
 	}
 
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("get")); err != nil {
-		return 0, 0, 0, fmt.Errorf("write komari command: %w", err)
-	}
-
-	_, message, err := conn.ReadMessage()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.String(), bytes.NewReader(requestBody))
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("read komari websocket: %w", err)
+		return 0, 0, 0, err
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 
-	message = bytes.TrimSpace(message)
-	if len(message) == 0 {
-		return 0, 0, 0, errors.New("empty komari websocket payload")
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("komari request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, 0, fmt.Errorf("komari request failed with status %s", resp.Status)
 	}
 
 	type komariResponse struct {
-		Data struct {
-			Data map[string]struct {
-				Network struct {
-					TotalUp   json.Number `json:"totalUp"`
-					TotalDown json.Number `json:"totalDown"`
-				} `json:"network"`
-			} `json:"data"`
-		} `json:"data"`
+		Result map[string]struct {
+			NetTotalUp   json.Number `json:"net_total_up"`
+			NetTotalDown json.Number `json:"net_total_down"`
+		} `json:"result"`
 	}
 
-	decoder := json.NewDecoder(bytes.NewReader(message))
+	decoder := json.NewDecoder(resp.Body)
 	decoder.UseNumber()
 
 	var payload komariResponse
 	if err := decoder.Decode(&payload); err != nil {
-		return 0, 0, 0, fmt.Errorf("parse komari websocket payload: %w", err)
+		return 0, 0, 0, fmt.Errorf("parse komari response: %w", err)
 	}
 
 	observed := make(map[string]struct {
 		Up   int64
 		Down int64
 	})
-	for id, info := range payload.Data.Data {
+	for id, info := range payload.Result {
 		cleanID := strings.TrimSpace(id)
 		if cleanID == "" {
 			continue
 		}
 
-		up := jsonNumberToInt64(info.Network.TotalUp)
+		up := jsonNumberToInt64(info.NetTotalUp)
 		if up < 0 {
 			up = 0
 		}
-		down := jsonNumberToInt64(info.Network.TotalDown)
+		down := jsonNumberToInt64(info.NetTotalDown)
 		if down < 0 {
 			down = 0
 		}
@@ -509,7 +493,7 @@ func (h *TrafficSummaryHandler) fetchBatchTraffic(ctx context.Context, base *url
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "traffic-info-bot/0.1")
+	req.Header.Set("User-Agent", "traffic-info/0.1")
 
 	resp, err := h.client.Do(req)
 	if err != nil {

@@ -32,7 +32,7 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+  --font-sans: 'OPlusSans3', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Monaco, 'Courier New', monospace;
 }
@@ -68,6 +68,7 @@
   --font-mono: var(--font-mono);
   --font-inter: var(--font-sans);
   --font-manrope: var(--font-mono);
+  --font-oplusans3: 'OPlusSans3', var(--font-sans);
   --font-haipaiqiangdiaosenxiyuan: var(--font-sans);
   --font-jetbrains-mono: var(--font-mono);
 

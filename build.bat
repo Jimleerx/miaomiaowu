@@ -46,7 +46,7 @@ echo.
 echo [2/3] 构建 Linux 版本后端...
 set GOOS=linux
 set GOARCH=amd64
-go build -ldflags="-s -w" -o %BUILD_DIR%\traffic-info-server-linux-amd64 cmd\server\main.go cmd\server\cors.go
+go build -ldflags="-s -w" -o %BUILD_DIR%\traffic-info-linux-amd64 cmd\server\main.go cmd\server\cors.go
 if errorlevel 1 (
     echo Linux 后端构建失败！
     exit /b 1
@@ -88,7 +88,7 @@ echo 构建完成！
 echo ========================================
 echo.
 echo 输出文件:
-echo   - Linux:   %BUILD_DIR%\traffic-info-server-linux-amd64
+echo   - Linux:   %BUILD_DIR%\traffic-info-linux-amd64
 echo   - Windows: %BUILD_DIR%\traffic-info-windows-amd64.exe
 echo   - Release: %OUTPUT_DIR%\windows\
 echo.
