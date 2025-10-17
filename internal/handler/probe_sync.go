@@ -61,7 +61,8 @@ func (h *probeSyncHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	probeType := strings.ToLower(strings.TrimSpace(payload.ProbeType))
-	address := strings.TrimSpace(payload.Address)
+	// 浏览器地址栏粘贴过来的url带有/后缀, 这里去除防止接口报错
+	address := strings.TrimRight(strings.TrimSpace(payload.Address), "/")
 
 	if address == "" {
 		writeBadRequest(w, "探针地址不能为空")
@@ -390,9 +391,10 @@ func (h *probeSyncHandler) fetchKomariServers(ctx context.Context, address strin
 			name = fmt.Sprintf("服务器 %d", i+1)
 		}
 
+		// komari traffic_limit / 1024 / 1024 /1024
 		var monthlyGB float64
 		if limitVal, err := node.TrafficLimit.Float64(); err == nil && limitVal > 0 {
-			monthlyGB = limitVal
+			monthlyGB = limitVal / bytesPerGigabyte
 		}
 
 		servers = append(servers, probeSyncServer{
