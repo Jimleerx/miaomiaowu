@@ -61,7 +61,8 @@ func (h *probeSyncHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	probeType := strings.ToLower(strings.TrimSpace(payload.ProbeType))
-	address := strings.TrimSpace(payload.Address)
+	// 浏览器地址栏粘贴过来的url带有/后缀, 这里去除防止接口报错
+	address := strings.TrimRight(strings.TrimSpace(payload.Address), "/")
 
 	if address == "" {
 		writeBadRequest(w, "探针地址不能为空")
