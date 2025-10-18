@@ -5,7 +5,6 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import { UserMenu } from './user-menu'
 import { useAuthStore } from '@/stores/auth-store'
 import { profileQueryFn } from '@/lib/profile'
-import { cn } from '@/lib/utils'
 
 const baseNavLinks = [
   {
@@ -65,7 +64,7 @@ export function Topbar() {
         <div className='flex items-center gap-4 sm:gap-6'>
           <Link
             to='/'
-            className='flex items-center gap-3 font-semibold text-lg tracking-tight transition hover:text-primary'
+            className='flex items-center gap-3 font-semibold text-lg tracking-tight transition hover:text-primary outline-none focus:outline-none'
           >
             <img
               src='/images/logo.webp'
@@ -81,15 +80,13 @@ export function Topbar() {
                 key={to}
                 to={to}
                 aria-label={title}
-                className={({ isActive }) =>
-                  cn(
-                    'pixel-pill h-12 min-w-[128px] justify-start gap-3 text-xs font-semibold uppercase tracking-[0.35em] text-muted-foreground transition-colors duration-200',
-                    isActive && 'bg-primary/20 text-primary border-[color:rgba(217,119,87,0.55)]'
-                  )
-                }
+                className='pixel-button inline-flex items-center justify-start gap-3 min-w-[90px] px-3 py-2 h-9 text-sm font-semibold uppercase tracking-widest bg-background/75 text-foreground border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 hover:text-accent-foreground dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-input/40 transition-all'
+                activeProps={{
+                  className: 'bg-primary/20 text-primary border-[color:rgba(217,119,87,0.55)] dark:bg-primary/20 dark:border-[color:rgba(217,119,87,0.55)]'
+                }}
               >
-                <Icon className='size-[18px]' />
-                <span className='hidden sm:inline tracking-[0.35em]'>{title}</span>
+                <Icon className='size-[18px] shrink-0' />
+                <span className='hidden sm:inline'>{title}</span>
               </Link>
             ))}
           </nav>

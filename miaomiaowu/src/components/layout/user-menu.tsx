@@ -39,16 +39,16 @@ export function UserMenu() {
           <Button
             variant='outline'
             size='sm'
-            className='min-w-[180px] justify-start gap-3 px-3 py-2'
+            className='min-w-[120px] justify-center gap-2 px-2 py-2 overflow-hidden'
           >
             <span className='sr-only'>用户菜单</span>
-            <Avatar className='size-9 rounded-none border-[1.5px] border-[color:rgba(241,140,110,0.45)] shadow-[2px_2px_0_rgba(0,0,0,0.2)]'>
+            <Avatar className='size-7 border-[1.5px] border-[color:rgba(241,140,110,0.45)] shadow-[2px_2px_0_rgba(0,0,0,0.2)]'>
               <AvatarImage src={avatarSrc} alt={displayName} />
-              <AvatarFallback className='rounded-none'>{fallbackText || '用户'}</AvatarFallback>
+              <AvatarFallback>{fallbackText || '用户'}</AvatarFallback>
             </Avatar>
-            <div className='flex flex-col items-start leading-tight'>
-              <span className='text-sm font-semibold'>{displayName}</span>
-              <span className='text-xs uppercase tracking-[0.3em] text-muted-foreground'>
+            <div className='flex flex-col items-center leading-tight'>
+              <span className='text-sm font-semibold truncate max-w-[70px]'>{displayName}</span>
+              <span className='text-xs uppercase tracking-[0.2em] text-muted-foreground'>
                 {levelText}
               </span>
             </div>

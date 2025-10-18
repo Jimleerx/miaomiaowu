@@ -23,11 +23,11 @@
   --brand: var(--brand-500);
   --brand-light: var(--brand-300);
   --brand-dark: var(--brand-700);
-  --background: #fff7f2;
+  --background: hsl(60 20% 99%);
   --foreground: #271610;
-  --card: #ffffff;
+  --card: hsl(60 20% 99%);
   --card-foreground: #33170f;
-  --popover: #fff3eb;
+  --popover: hsl(60 20% 99%);
   --popover-foreground: #2a140e;
   --primary: var(--brand-500);
   --primary-foreground: #fffaf7;
@@ -63,9 +63,9 @@
 .dark {
   --background: #10131c;
   --foreground: #f9f4f1;
-  --card: #141925;
+  --card: #10131c;
   --card-foreground: #f6eee8;
-  --popover: #161d2a;
+  --popover: #10131c;
   --popover-foreground: #f9f4f1;
   --primary: var(--brand-400);
   --primary-foreground: #30160f;

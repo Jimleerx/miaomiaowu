@@ -35,7 +35,7 @@ export function ThemeSwitch() {
         <Button
           variant='outline'
           size='sm'
-          className='min-w-[90px] justify-start gap-3 px-3 py-2 text-xs font-semibold uppercase tracking-widest'
+          className='min-w-[90px] justify-start gap-3 px-3 py-2 text-sm font-semibold uppercase tracking-widest'
         >
           <Icon className='size-[18px]' />
           <span>{displayText}</span>

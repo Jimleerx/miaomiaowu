@@ -153,11 +153,7 @@
     border-width: 2px;
     border-style: solid;
     border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
-    background-image: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--card) 88%, var(--primary) 8%),
-      color-mix(in srgb, var(--card) 60%, var(--secondary) 40%)
-    );
+    background: var(--card);
     box-shadow:
       4px 4px 0 rgba(0, 0, 0, 0.22),
       0 0 0 1px rgba(255, 255, 255, 0.04);
