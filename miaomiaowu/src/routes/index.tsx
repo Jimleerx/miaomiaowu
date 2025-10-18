@@ -204,25 +204,31 @@ function DashboardPage() {
                   <AreaChart data={chartData} margin={{ left: 16, right: 16, top: 24, bottom: 8 }}>
                     <defs>
                       <linearGradient id='dailyUsageGradient' x1='0' y1='0' x2='0' y2='1'>
-                        <stop offset='5%' stopColor='hsl(var(--primary))' stopOpacity={0.5} />
-                        <stop offset='95%' stopColor='hsl(var(--primary))' stopOpacity={0.1} />
+                        <stop offset='0%' stopColor='#d97757' stopOpacity={0.7} />
+                        <stop offset='100%' stopColor='#d97757' stopOpacity={0.2} />
                       </linearGradient>
+                      <filter id='shadow' x='-50%' y='-50%' width='200%' height='200%'>
+                        <feDropShadow dx='0' dy='2' stdDeviation='3' floodColor='#d97757' floodOpacity='0.3'/>
+                      </filter>
                     </defs>
-                    <CartesianGrid strokeDasharray='3 3' className='stroke-border' />
                     <XAxis
                       dataKey='label'
                       tickLine={false}
                       axisLine={false}
+                      splitLine={false}
                       className='fill-foreground'
+                      stroke='#a1a1aa'
                     />
                     <YAxis
                       tickLine={false}
                       axisLine={false}
+                      splitLine={false}
                       tickFormatter={(value: number) => `${numberFormatter.format(value)}`}
                       className='fill-foreground'
+                      stroke='#a1a1aa'
                     />
                     <Tooltip
-                      cursor={{ strokeDasharray: '3 3', stroke: 'hsl(var(--primary))' }}
+                      cursor={{ stroke: '#d97757', strokeWidth: 2 }}
                       labelFormatter={(label: string) => `日期：${chartData.find((item) => item.label === label)?.date ?? label}`}
                       formatter={(value: number) => [`${numberFormatter.format(value)} GB`, '日消耗']}
                       contentStyle={{
@@ -235,10 +241,11 @@ function DashboardPage() {
                     <Area
                       type='monotone'
                       dataKey='used'
-                      stroke='hsl(var(--primary))'
+                      stroke='#d97757'
                       fill='url(#dailyUsageGradient)'
                       strokeWidth={3}
                       name='日消耗'
+                      filter='url(#shadow)'
                     />
                   </AreaChart>
                 </ResponsiveContainer>
