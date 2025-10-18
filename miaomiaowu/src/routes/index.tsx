@@ -204,28 +204,40 @@ function DashboardPage() {
                   <AreaChart data={chartData} margin={{ left: 16, right: 16, top: 24, bottom: 8 }}>
                     <defs>
                       <linearGradient id='dailyUsageGradient' x1='0' y1='0' x2='0' y2='1'>
-                        <stop offset='5%' stopColor='hsl(var(--primary))' stopOpacity={0.4} />
-                        <stop offset='95%' stopColor='hsl(var(--primary))' stopOpacity={0.05} />
+                        <stop offset='5%' stopColor='hsl(var(--primary))' stopOpacity={0.5} />
+                        <stop offset='95%' stopColor='hsl(var(--primary))' stopOpacity={0.1} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray='3 3' className='stroke-muted/40' />
-                    <XAxis dataKey='label' tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray='3 3' className='stroke-border' />
+                    <XAxis
+                      dataKey='label'
+                      tickLine={false}
+                      axisLine={false}
+                      className='fill-foreground'
+                    />
                     <YAxis
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(value: number) => `${numberFormatter.format(value)}`}
+                      className='fill-foreground'
                     />
                     <Tooltip
-                      cursor={{ strokeDasharray: '3 3' }}
+                      cursor={{ strokeDasharray: '3 3', stroke: 'hsl(var(--primary))' }}
                       labelFormatter={(label: string) => `日期：${chartData.find((item) => item.label === label)?.date ?? label}`}
                       formatter={(value: number) => [`${numberFormatter.format(value)} GB`, '日消耗']}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: 'var(--radius)',
+                      }}
+                      labelStyle={{ color: 'hsl(var(--foreground))' }}
                     />
                     <Area
                       type='monotone'
                       dataKey='used'
                       stroke='hsl(var(--primary))'
                       fill='url(#dailyUsageGradient)'
-                      strokeWidth={2}
+                      strokeWidth={3}
                       name='日消耗'
                     />
                   </AreaChart>
