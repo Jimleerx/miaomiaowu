@@ -30,24 +30,28 @@ export function UserMenu() {
   const avatarSrc = profile?.avatar_url?.trim() ? profile.avatar_url.trim() : fallbackAvatar
   const fallbackText = displayName.slice(0, 2)
   const emailText = profile?.email?.trim()
+  const levelText = profile?.role ? profile.role.toUpperCase() : 'LV.0'
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant='ghost'
+            variant='outline'
             size='sm'
-            className='rounded-full px-2 sm:px-3'
+            className='min-w-[180px] justify-start gap-3 px-3 py-2'
           >
             <span className='sr-only'>用户菜单</span>
-            <Avatar className='size-8'>
+            <Avatar className='size-9 rounded-none border-[1.5px] border-[color:rgba(241,140,110,0.45)] shadow-[2px_2px_0_rgba(0,0,0,0.2)]'>
               <AvatarImage src={avatarSrc} alt={displayName} />
-              <AvatarFallback>{fallbackText || '用户'}</AvatarFallback>
+              <AvatarFallback className='rounded-none'>{fallbackText || '用户'}</AvatarFallback>
             </Avatar>
-            <span className='hidden sm:inline-block ps-2'>
-              {displayName}
-            </span>
+            <div className='flex flex-col items-start leading-tight'>
+              <span className='text-sm font-semibold'>{displayName}</span>
+              <span className='text-xs uppercase tracking-[0.3em] text-muted-foreground'>
+                {levelText}
+              </span>
+            </div>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-56 space-y-3 p-4'>
