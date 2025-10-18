@@ -1,0 +1,1 @@
+import{b as s,u as r,r as a}from"./index-BIA9nVWk.js";function n(){const e=s(),{auth:t}=r();return a.useEffect(()=>{if(!t.accessToken){e({to:"/",replace:!0});return}e({to:"/settings",replace:!0})},[t.accessToken,e]),null}export{n as component};

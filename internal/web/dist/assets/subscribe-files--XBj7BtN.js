@@ -1,0 +1,1 @@
+import{j as s,O as o}from"./index-BIA9nVWk.js";import{T as r}from"./topbar-Fz-IxQaZ.js";import"./api-CF1mdzCj.js";import"./utils-CBfrqCZ4.js";function e(){return s.jsxs("div",{className:"min-h-svh bg-background",children:[s.jsx(r,{}),s.jsx(o,{})]})}export{e as component};
