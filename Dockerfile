@@ -1,18 +1,19 @@
 # Build stage for frontend
 FROM node:20-alpine AS frontend-builder
 
-WORKDIR /app/frontend
+WORKDIR /app
 
 # Copy frontend package files
-COPY miaomiaowu/package*.json ./
+COPY miaomiaowu/package*.json ./miaomiaowu/
 
 # Install dependencies
+WORKDIR /app/miaomiaowu
 RUN npm ci
 
 # Copy frontend source
 COPY miaomiaowu/ ./
 
-# Build frontend
+# Build frontend (will output to ../internal/web/dist)
 RUN npm run build
 
 # Build stage for backend
@@ -32,8 +33,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Copy built frontend from previous stage
-COPY --from=frontend-builder /app/frontend/dist ./internal/web/dist
+# Copy built frontend from previous stage (vite outputs to /app/internal/web/dist)
+COPY --from=frontend-builder /app/internal/web/dist ./internal/web/dist
 
 # Build backend with optimizations
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
