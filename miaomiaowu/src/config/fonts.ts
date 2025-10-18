@@ -16,4 +16,4 @@
  *      --font-roboto: 'Roboto', var(--font-sans);
  *   }
  */
-export const fonts = ['oplusans3', 'haipaiqiangdiaosenxiyuan', 'jetbrains-mono', 'system'] as const
+export const fonts = ['oplusans3', 'jetbrains-mono', 'system'] as const

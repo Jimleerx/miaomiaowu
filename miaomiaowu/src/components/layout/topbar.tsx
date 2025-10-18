@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, ClipboardList, Link as LinkIcon, Radar, Settings2, Users } from 'lucide-react'
+import { Activity, Link as LinkIcon, Network, Radar, Settings2, Users, Database } from 'lucide-react'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { UserMenu } from './user-menu'
 import { useAuthStore } from '@/stores/auth-store'
@@ -17,6 +17,11 @@ const baseNavLinks = [
     to: '/subscription',
     icon: LinkIcon,
   },
+  // {
+  //   title: '节点管理',
+  //   to: '/nodes',
+  //   icon: Network,
+  // },
 ]
 
 const adminNavLinks = [
@@ -27,14 +32,14 @@ const adminNavLinks = [
   },
   {
     title: '订阅管理',
-    to: '/subscription/manage',
-    icon: ClipboardList,
+    to: '/subscribe-files',
+    icon: Database,
   },
-  {
-    title: '规则配置',
-    to: '/rules',
-    icon: Settings2,
-  },
+  // {
+  //   title: '规则配置',
+  //   to: '/rules',
+  //   icon: Settings2,
+  // },
   {
     title: '用户管理',
     to: '/users',

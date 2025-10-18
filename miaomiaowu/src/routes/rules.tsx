@@ -32,13 +32,19 @@ export const Route = createFileRoute('/rules')({
       throw redirect({ to: '/' })
     }
   },
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      file: (search.file as string) || undefined,
+    }
+  },
   component: RulesPage,
 })
 
 function RulesPage() {
   const { auth } = useAuthStore()
   const queryClient = useQueryClient()
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const search = Route.useSearch()
+  const [selectedFile, setSelectedFile] = useState<string | null>(search.file || null)
   const [editorValue, setEditorValue] = useState('')
   const [isDirty, setIsDirty] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -82,11 +88,12 @@ function RulesPage() {
   useEffect(() => {
     if (!isAdmin) return
     if (selectedFile) return
+    if (search.file) return // Don't auto-select if URL has a file parameter
     const first = listQuery.data?.files?.[0]?.name
     if (first) {
       setSelectedFile(first)
     }
-  }, [isAdmin, listQuery.data, selectedFile])
+  }, [isAdmin, listQuery.data, selectedFile, search.file])
 
   const detailQuery = useQuery({
     queryKey: ['rule-file', selectedFile],

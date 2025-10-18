@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>代理协议解析测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f7fa;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #7f8c8d;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #34495e;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 1px solid #dcdfe6;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      resize: vertical;
+      transition: border-color 0.3s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #409eff;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+
+    .btn-primary {
+      background: #409eff;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #66b1ff;
+    }
+
+    .btn-secondary {
+      background: #67c23a;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #85ce61;
+    }
+
+    .btn-clear {
+      background: #e6a23c;
+      color: white;
+    }
+
+    .btn-clear:hover {
+      background: #ebb563;
+    }
+
+    .result-section {
+      margin-top: 30px;
+    }
+
+    .result-section h2 {
+      color: #2c3e50;
+      font-size: 20px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #409eff;
+    }
+
+    .result-box {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .result-box pre {
+      margin: 0;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .info-item {
+      padding: 12px;
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 4px;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 5px;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: #2c3e50;
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status-error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .examples {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e7f3ff;
+      border-left: 4px solid #409eff;
+      border-radius: 4px;
+    }
+
+    .examples h3 {
+      color: #2c3e50;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .example-item {
+      margin: 8px 0;
+      font-size: 12px;
+      color: #5a6c7d;
+      font-family: monospace;
+      cursor: pointer;
+      padding: 8px;
+      background: white;
+      border-radius: 3px;
+      transition: background 0.2s;
+    }
+
+    .example-item:hover {
+      background: #f0f8ff;
+    }
+
+    .error-message {
+      color: #f56c6c;
+      background: #fef0f0;
+      padding: 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 代理协议解析测试工具</h1>
+    <p class="subtitle">支持 VMess, VLESS, Trojan, SS, Hysteria, Hysteria2, TUIC, SOCKS5 等协议</p>
+
+    <div class="input-group">
+      <label>输入代理 URL:</label>
+      <textarea id="proxyUrl" placeholder="vless://uuid@server:port?type=ws&security=tls&path=/path#NodeName"></textarea>
+    </div>
+
+    <div class="button-group">
+      <button class="btn-primary" onclick="parseUrl()">🚀 解析</button>
+      <button class="btn-secondary" onclick="parseAndConvert()">🔄 解析并转换为 Clash</button>
+      <button class="btn-clear" onclick="clearAll()">🗑️ 清空</button>
+    </div>
+
+    <div class="examples">
+      <h3>📝 示例 URL (点击自动填入):</h3>
+      <div class="example-item" onclick="fillExample('vless')">
+        VLESS: vless://12345678-1234-1234-1234-123456789abc@example.com:443?type=ws&security=tls&path=/websocket&host=example.com#VLESS-Node
+      </div>
+      <div class="example-item" onclick="fillExample('trojan')">
+        Trojan: trojan://password123@example.com:443?sni=example.com&alpn=h2,http/1.1#Trojan-Node
+      </div>
+      <div class="example-item" onclick="fillExample('ss')">
+        Shadowsocks: ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@example.com:8388#SS-Node
+      </div>
+      <div class="example-item" onclick="fillExample('socks')">
+        SOCKS5: socks://dXNlcjpwYXNz@example.com:1080#SOCKS5-Node
+      </div>
+    </div>
+
+    <div id="result" style="display: none;">
+      <div class="result-section">
+        <h2>解析结果</h2>
+        <div id="status"></div>
+        <div id="nodeInfo"></div>
+        <div id="rawResult"></div>
+      </div>
+
+      <div class="result-section" id="clashSection" style="display: none;">
+        <h2>Clash 格式</h2>
+        <div class="result-box">
+          <pre id="clashResult"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // 内联 proxy-parser 核心代码
+    function base64Decode(str) {
+      try {
+        let base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+        const pad = base64.length % 4
+        if (pad) {
+          base64 += '='.repeat(4 - pad)
+        }
+        return decodeURIComponent(escape(atob(base64)))
+      } catch (e) {
+        console.error('Base64 decode error:', e)
+        return ''
+      }
+    }
+
+    function parseQueryString(query) {
+      const params = {}
+      if (!query) return params
+      const pairs = query.split('&')
+      for (const pair of pairs) {
+        const [key, value] = pair.split('=')
+        if (key) {
+          params[decodeURIComponent(key)] = value ? decodeURIComponent(value) : ''
+        }
+      }
+      return params
+    }
+
+    function parseVmess(url) {
+      try {
+        const base64Content = url.substring('vmess://'.length)
+        const jsonStr = base64Decode(base64Content)
+        if (!jsonStr) return null
+        const config = JSON.parse(jsonStr)
+
+        const node = {
+          name: config.ps || config.name || 'VMess Node',
+          type: 'vmess',
+          server: config.add || config.address || '',
+          port: parseInt(config.port) || 0,
+          uuid: config.id || '',
+          alterId: parseInt(config.aid) || 0,
+          cipher: config.scy || 'auto',
+          network: config.net || 'tcp',
+          tls: config.tls === 'tls' || config.tls === true
+        }
+
+        // SNI/Servername
+        if (config.sni) {
+          node.servername = config.sni
+        } else if (config.host && config.tls) {
+          node.servername = config.host
+        }
+
+        // ALPN
+        if (config.alpn) {
+          node.alpn = typeof config.alpn === 'string' ? config.alpn.split(',') : config.alpn
+        }
+
+        // Client Fingerprint
+        if (config.fp) {
+          node.fp = config.fp
+        }
+
+        // Skip cert verify
+        if (config.allowInsecure !== undefined) {
+          node.skipCertVerify = config.allowInsecure === true || config.allowInsecure === '1' || config.allowInsecure === 1
+        }
+
+        // WebSocket
+        if (config.net === 'ws') {
+          node['ws-opts'] = {
+            path: config.path || '/',
+            headers: config.host ? { Host: config.host } : {}
+          }
+        }
+
+        // HTTP/2
+        if (config.net === 'h2') {
+          node['h2-opts'] = {
+            host: config.host ? (Array.isArray(config.host) ? config.host : [config.host]) : [],
+            path: config.path || '/'
+          }
+        }
+
+        // gRPC
+        if (config.net === 'grpc') {
+          node['grpc-opts'] = {
+            'grpc-service-name': config.path || config['grpc-service-name'] || ''
+          }
+        }
+
+        return node
+      } catch (e) {
+        console.error('Parse VMess error:', e)
+        return null
+      }
+    }
+
+    function parseShadowsocks(url) {
+      try {
+        const content = url.substring('ss://'.length)
+        let name = 'SS Node'
+        let mainPart = content
+        if (content.includes('#')) {
+          const parts = content.split('#')
+          mainPart = parts[0]
+          name = decodeURIComponent(parts[1])
+        }
+        let server = '', port = 0, method = '', password = ''
+        if (mainPart.includes('@')) {
+          const [encodedPart, serverPart] = mainPart.split('@')
+          const decoded = base64Decode(encodedPart)
+          const [m, p] = decoded.split(':')
+          method = m
+          password = p
+          const [s, po] = serverPart.split(':')
+          server = s
+          port = parseInt(po) || 0
+        } else {
+          const decoded = base64Decode(mainPart)
+          const atIndex = decoded.lastIndexOf('@')
+          if (atIndex === -1) return null
+          const authPart = decoded.substring(0, atIndex)
+          const serverPart = decoded.substring(atIndex + 1)
+          const [m, p] = authPart.split(':')
+          method = m
+          password = p
+          const [s, po] = serverPart.split(':')
+          server = s
+          port = parseInt(po) || 0
+        }
+        return { name, type: 'ss', server, port, cipher: method, password }
+      } catch (e) {
+        console.error('Parse Shadowsocks error:', e)
+        return null
+      }
+    }
+
+    function parseGenericProtocol(url, protocol) {
+      try {
+        const content = url.substring(`${protocol}://`.length)
+        let name = `${protocol.toUpperCase()} Node`
+        let mainPart = content
+        if (content.includes('#')) {
+          const hashIndex = content.lastIndexOf('#')
+          mainPart = content.substring(0, hashIndex)
+          name = decodeURIComponent(content.substring(hashIndex + 1))
+        }
+        let queryParams = {}
+        let authAndServer = mainPart
+        if (mainPart.includes('?')) {
+          const [main, query] = mainPart.split('?')
+          authAndServer = main
+          queryParams = parseQueryString(query)
+        }
+        const atIndex = authAndServer.lastIndexOf('@')
+        if (atIndex === -1) return null
+        const password = authAndServer.substring(0, atIndex)
+        const serverPart = authAndServer.substring(atIndex + 1)
+
+        let server = ''
+        let port = 0
+
+        // 检查是否是 IPv6 地址 (格式: [ipv6]:port)
+        if (serverPart.startsWith('[')) {
+          const closeBracketIndex = serverPart.indexOf(']')
+          if (closeBracketIndex !== -1) {
+            const ipv6Address = serverPart.substring(1, closeBracketIndex)
+            const portPart = serverPart.substring(closeBracketIndex + 1)
+            port = parseInt(portPart.replace(':', '')) || 0
+
+            // 对于 Hysteria2，保留方括号；其他协议去掉方括号
+            if (protocol === 'hysteria2' || protocol === 'hysteria') {
+              server = serverPart.substring(0, closeBracketIndex + 1) // 包含方括号 [ipv6]
+            } else {
+              server = ipv6Address // 去掉方括号
+            }
+          }
+        } else {
+          // IPv4 或域名
+          const parts = serverPart.split(':')
+          server = parts[0]
+          port = parseInt(parts[parts.length - 1]) || 0
+        }
+
+        const node = { name, type: protocol, server, port }
+
+        if (protocol === 'vless') {
+          node.password = password
+          node.uuid = password
+          node.flow = queryParams.flow || ''
+          node.security = queryParams.security || 'none'
+          node.tls = queryParams.security === 'tls' || queryParams.security === 'reality'
+          node.type = queryParams.type || 'tcp'
+          node.network = queryParams.type || 'tcp'
+          node.sni = queryParams.sni || server
+          node.servername = queryParams.sni || server
+          node.skipCertVerify = queryParams.allowInsecure === '1'
+
+          // Reality 协议专用参数
+          if (queryParams.security === 'reality') {
+            node.pbk = queryParams.pbk || ''
+            node.sid = queryParams.sid || ''
+            node.spx = queryParams.spx || ''
+            node.fp = queryParams.fp || ''
+          }
+
+          // 传输层配置
+          if (queryParams.type === 'ws') {
+            node['ws-opts'] = {
+              path: queryParams.path || '/',
+              headers: queryParams.host ? { Host: queryParams.host } : {}
+            }
+          } else if (queryParams.type === 'grpc') {
+            node['grpc-opts'] = {
+              'grpc-service-name': queryParams.serviceName || queryParams.path || ''
+            }
+          }
+
+          // 其他常见参数
+          if (queryParams.alpn) {
+            node.alpn = queryParams.alpn.split(',')
+          }
+          if (queryParams.host) {
+            node.host = queryParams.host
+          }
+          if (queryParams.path) {
+            node.path = queryParams.path
+          }
+        } else if (protocol === 'trojan') {
+          node.password = password
+          node.sni = queryParams.sni || queryParams.peer || queryParams.host || server
+          node.network = queryParams.type || 'tcp'
+          node.type = queryParams.type || 'tcp'
+
+          // TLS 设置
+          if (queryParams.security) {
+            node.security = queryParams.security
+          }
+
+          // 传输层配置
+          if (queryParams.type === 'ws') {
+            node['ws-opts'] = {
+              path: queryParams.path || '/',
+              headers: queryParams.host ? { Host: queryParams.host } : {}
+            }
+          } else if (queryParams.type === 'grpc') {
+            node['grpc-opts'] = {
+              'grpc-service-name': queryParams.serviceName || queryParams.path || ''
+            }
+          }
+
+          // 其他参数
+          if (queryParams.alpn) {
+            node.alpn = queryParams.alpn.split(',')
+          }
+          if (queryParams.fp) {
+            node.fp = queryParams.fp
+          }
+          node.skipCertVerify = queryParams.allowInsecure === '1'
+        } else if (protocol === 'hysteria' || protocol === 'hysteria2') {
+          node.password = password
+          node.auth = password
+          node.ports = queryParams.mport || port.toString()
+          node.obfs = queryParams.obfs
+          node['obfs-password'] = queryParams.obfsParam
+          node.sni = queryParams.peer || queryParams.sni || (server.startsWith('[') ? '' : server)
+          node.alpn = queryParams.alpn ? queryParams.alpn.split(',') : undefined
+          node.skipCertVerify = false
+          node.up = queryParams.up || queryParams.upmbps
+          node.down = queryParams.down || queryParams.downmbps
+          node.fp = queryParams.fp || 'chrome'
+        } else if (protocol === 'tuic') {
+          node.uuid = password
+          node.password = queryParams.password || ''
+          node.sni = queryParams.sni || server
+          node.alpn = queryParams.alpn ? queryParams.alpn.split(',') : ['h3']
+          node.skipCertVerify = queryParams.allowInsecure === '1'
+          node['congestion-controller'] = queryParams.congestion_control || 'bbr'
+          node['udp-relay-mode'] = queryParams.udp_relay_mode || 'native'
+        }
+
+        return node
+      } catch (e) {
+        console.error(`Parse ${protocol} error:`, e)
+        return null
+      }
+    }
+
+    function parseSocks(url) {
+      try {
+        const content = url.substring('socks://'.length)
+        let name = 'SOCKS Node'
+        let mainPart = content
+
+        if (content.includes('#')) {
+          const parts = content.split('#')
+          mainPart = parts[0]
+          name = decodeURIComponent(parts[1])
+        }
+
+        const [encodedAuth, serverPart] = mainPart.split('@')
+        const decoded = base64Decode(encodedAuth)
+        const [username, password] = decoded.split(':')
+
+        const [server, portStr] = serverPart.split(':')
+        const port = parseInt(portStr) || 0
+
+        return {
+          name,
+          type: 'socks5',
+          server,
+          port,
+          username,
+          password
+        }
+      } catch (e) {
+        console.error('Parse SOCKS error:', e)
+        return null
+      }
+    }
+
+    window.parseProxyUrl = function(url) {
+      if (!url || typeof url !== 'string') return null
+      url = url.trim()
+      if (url.startsWith('vmess://')) return parseVmess(url)
+      if (url.startsWith('ss://')) return parseShadowsocks(url)
+      if (url.startsWith('socks://')) return parseSocks(url)
+      if (url.startsWith('trojan://')) return parseGenericProtocol(url, 'trojan')
+      if (url.startsWith('vless://')) return parseGenericProtocol(url, 'vless')
+      if (url.startsWith('hysteria://')) return parseGenericProtocol(url, 'hysteria')
+      if (url.startsWith('hy2://')) return parseGenericProtocol(url.replace('hy2://', 'hysteria2://'), 'hysteria2')
+      if (url.startsWith('hysteria2://')) return parseGenericProtocol(url, 'hysteria2')
+      if (url.startsWith('tuic://')) return parseGenericProtocol(url, 'tuic')
+      return null
+    }
+
+    window.toClashProxy = function(node) {
+      const clash = { name: node.name, type: node.type, server: node.server, port: node.port }
+
+      // 需要排除的参数（原始缩写已转换为标准格式）
+      const excludeKeys = ['name', 'type', 'server', 'port', 'pbk', 'sid', 'spx', 'fp', 'allowInsecure', 'skipCertVerify', 'sni', 'servername', 'password', 'auth', 'security', 'fingerprint']
+
+      // 标准字段
+      if (node.uuid) {
+        clash.uuid = node.uuid
+      } else if (node.password && node.type !== 'vless' && node.type !== 'hysteria2' && node.type !== 'hysteria') {
+        // VLESS 和 Hysteria2 不使用 password 字段
+        clash.password = node.password
+      }
+
+      // Hysteria/Hysteria2 专用字段
+      if (node.type === 'hysteria2' || node.type === 'hysteria') {
+        if (node.auth) {
+          clash.auth = node.auth
+        } else if (node.password) {
+          clash.auth = node.password
+        }
+      }
+
+      // SOCKS5 协议专用字段
+      if (node.type === 'socks5' || node.type === 'socks') {
+        if (node.username) clash.username = node.username
+        if (node.password) clash.password = node.password
+      }
+
+      // TLS 设置
+      if (node.security) {
+        if (node.type === 'vless') {
+          clash.tls = node.security === 'tls' || node.security === 'reality'
+        } else if (node.type === 'trojan') {
+          // Trojan 默认使用 TLS
+          clash.tls = true
+          if (node.sni) {
+            clash.sni = node.sni
+          }
+        } else if (node.tls !== undefined) {
+          clash.tls = node.tls
+        }
+      } else if (node.tls !== undefined) {
+        clash.tls = node.tls
+      } else if (node.type === 'trojan') {
+        // Trojan 默认启用 TLS
+        clash.tls = true
+      }
+
+      // Flow 控制
+      if (node.flow) clash.flow = node.flow
+
+      // Skip cert verify - Reality 协议默认为 true
+      if (node.security === 'reality') {
+        clash['skip-cert-verify'] = true
+      } else if (node.skipCertVerify !== undefined) {
+        clash['skip-cert-verify'] = node.skipCertVerify
+      } else if (node.allowInsecure !== undefined) {
+        clash['skip-cert-verify'] = node.allowInsecure
+      }
+
+      // Reality 协议选项
+      if (node.security === 'reality') {
+        clash['reality-opts'] = {}
+        if (node.pbk) clash['reality-opts']['public-key'] = node.pbk
+        if (node.sid !== undefined) clash['reality-opts']['short-id'] = node.sid || ''
+      }
+
+      // servername/SNI - 不输出 servername，避免与 server 重复
+      // if (node.servername || node.sni) {
+      //   clash.servername = node.servername || node.sni
+      // }
+
+      // Client Fingerprint
+      if (node.fp) clash['client-fingerprint'] = node.fp
+
+      // 网络类型
+      if (node.network) clash.network = node.network
+
+      // ALPN
+      if (node.alpn) clash.alpn = node.alpn
+
+      // 其他加密设置
+      if (node.cipher) clash.cipher = node.cipher
+
+      // VMess 专用字段
+      if (node.type === 'vmess') {
+        if (node.alterId !== undefined) clash.alterId = node.alterId
+        // VMess 默认添加 tfo: false
+        if (clash.tfo === undefined) clash.tfo = false
+      }
+
+      // 复制其他属性
+      for (const [key, value] of Object.entries(node)) {
+        if (value !== undefined &&
+            !excludeKeys.includes(key) &&
+            !clash.hasOwnProperty(key) &&
+            key !== 'tls' &&
+            key !== 'security' &&
+            key !== 'sni') {
+          clash[key] = value
+        }
+      }
+
+      return clash
+    }
+  </script>
+
+  <script>
+    const examples = {
+      vless: 'vless://12345678-1234-1234-1234-123456789abc@example.com:443?type=ws&security=tls&path=/websocket&host=example.com#VLESS-Node',
+      trojan: 'trojan://password123@example.com:443?sni=example.com&alpn=h2,http/1.1#Trojan-Node',
+      ss: 'ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@example.com:8388#SS-Node',
+      socks: 'socks://dXNlcjpwYXNz@example.com:1080#SOCKS5-Node'
+    }
+
+    function fillExample(type) {
+      document.getElementById('proxyUrl').value = examples[type]
+    }
+
+    function parseUrl() {
+      const url = document.getElementById('proxyUrl').value.trim()
+      if (!url) {
+        alert('请输入代理 URL')
+        return
+      }
+
+      try {
+        const node = window.parseProxyUrl(url)
+        displayResult(node)
+      } catch (error) {
+        displayError(error)
+      }
+    }
+
+    function parseAndConvert() {
+      const url = document.getElementById('proxyUrl').value.trim()
+      if (!url) {
+        alert('请输入代理 URL')
+        return
+      }
+
+      try {
+        const node = window.parseProxyUrl(url)
+        if (node) {
+          const clash = window.toClashProxy(node)
+          displayResult(node, clash)
+        } else {
+          displayError(new Error('解析失败'))
+        }
+      } catch (error) {
+        displayError(error)
+      }
+    }
+
+    function displayResult(node, clash = null) {
+      const resultDiv = document.getElementById('result')
+      const statusDiv = document.getElementById('status')
+      const nodeInfoDiv = document.getElementById('nodeInfo')
+      const rawResultDiv = document.getElementById('rawResult')
+
+      if (!node) {
+        statusDiv.innerHTML = '<span class="status status-error">❌ 解析失败</span>'
+        nodeInfoDiv.innerHTML = '<p class="error-message">无法解析该 URL，请检查格式是否正确</p>'
+        rawResultDiv.innerHTML = ''
+        resultDiv.style.display = 'block'
+        return
+      }
+
+      statusDiv.innerHTML = '<span class="status status-success">✅ 解析成功</span>'
+
+      nodeInfoDiv.innerHTML = `
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">节点名称</div>
+            <div class="info-value">${node.name || '-'}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">协议类型</div>
+            <div class="info-value">${node.type.toUpperCase()}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">服务器</div>
+            <div class="info-value">${node.server}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">端口</div>
+            <div class="info-value">${node.port}</div>
+          </div>
+          ${node.uuid ? `
+          <div class="info-item">
+            <div class="info-label">UUID</div>
+            <div class="info-value">${node.uuid}</div>
+          </div>
+          ` : ''}
+          ${node.network ? `
+          <div class="info-item">
+            <div class="info-label">网络类型</div>
+            <div class="info-value">${node.network}</div>
+          </div>
+          ` : ''}
+          ${node.security ? `
+          <div class="info-item">
+            <div class="info-label">加密类型</div>
+            <div class="info-value">${node.security}</div>
+          </div>
+          ` : ''}
+          ${node.tls !== undefined ? `
+          <div class="info-item">
+            <div class="info-label">TLS</div>
+            <div class="info-value">${node.tls ? '是' : '否'}</div>
+          </div>
+          ` : ''}
+          ${node.flow ? `
+          <div class="info-item">
+            <div class="info-label">Flow</div>
+            <div class="info-value">${node.flow}</div>
+          </div>
+          ` : ''}
+          ${node.sni ? `
+          <div class="info-item">
+            <div class="info-label">SNI</div>
+            <div class="info-value">${node.sni}</div>
+          </div>
+          ` : ''}
+          ${node.pbk ? `
+          <div class="info-item">
+            <div class="info-label">Public Key</div>
+            <div class="info-value" style="font-size: 11px;">${node.pbk}</div>
+          </div>
+          ` : ''}
+          ${node.sid ? `
+          <div class="info-item">
+            <div class="info-label">Short ID</div>
+            <div class="info-value">${node.sid}</div>
+          </div>
+          ` : ''}
+          ${node.fp ? `
+          <div class="info-item">
+            <div class="info-label">Fingerprint</div>
+            <div class="info-value">${node.fp}</div>
+          </div>
+          ` : ''}
+          ${node.spx ? `
+          <div class="info-item">
+            <div class="info-label">Spider X</div>
+            <div class="info-value">${node.spx}</div>
+          </div>
+          ` : ''}
+        </div>
+      `
+
+      rawResultDiv.innerHTML = `
+        <h3 style="margin: 20px 0 10px; color: #5a6c7d; font-size: 14px;">原始解析数据:</h3>
+        <div class="result-box">
+          <pre>${JSON.stringify(node, null, 2)}</pre>
+        </div>
+      `
+
+      if (clash) {
+        document.getElementById('clashSection').style.display = 'block'
+        document.getElementById('clashResult').textContent = JSON.stringify(clash, null, 2)
+      } else {
+        document.getElementById('clashSection').style.display = 'none'
+      }
+
+      resultDiv.style.display = 'block'
+    }
+
+    function displayError(error) {
+      const resultDiv = document.getElementById('result')
+      const statusDiv = document.getElementById('status')
+      const nodeInfoDiv = document.getElementById('nodeInfo')
+
+      statusDiv.innerHTML = '<span class="status status-error">❌ 解析失败</span>'
+      nodeInfoDiv.innerHTML = `<p class="error-message">错误: ${error.message}</p>`
+
+      resultDiv.style.display = 'block'
+    }
+
+    function clearAll() {
+      document.getElementById('proxyUrl').value = ''
+      document.getElementById('result').style.display = 'none'
+    }
+  </script>
+</body>
+</html>

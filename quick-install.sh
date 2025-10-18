@@ -3,7 +3,7 @@
 
 set -e
 
-VERSION="v0.0.2"
+VERSION="v0.0.3"
 DOWNLOAD_URL="https://github.com/Jimleerx/miaomiaowu/releases/download/${VERSION}/traffic-info-linux-amd64"
 
 echo "正在下载并安装妙妙屋..."

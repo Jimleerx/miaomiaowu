@@ -59,6 +59,7 @@ func main() {
 	}
 
 	ensureDefaultSubscriptions(repo)
+	syncSubscribeFilesToDatabase(repo, subscribeDir)
 
 	trafficHandler := handler.NewTrafficSummaryHandler(repo)
 	userRepo := auth.NewRepositoryAdapter(repo)
@@ -76,6 +77,8 @@ func main() {
 	mux.Handle("/api/admin/users/reset-password", auth.RequireAdmin(tokenStore, userRepo, handler.NewUserResetPasswordHandler(repo)))
 	mux.Handle("/api/admin/subscriptions", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscriptionAdminHandler(subscribeDir, repo)))
 	mux.Handle("/api/admin/subscriptions/", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscriptionAdminHandler(subscribeDir, repo)))
+	mux.Handle("/api/admin/subscribe-files", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscribeFilesHandler(repo)))
+	mux.Handle("/api/admin/subscribe-files/", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscribeFilesHandler(repo)))
 	mux.Handle("/api/admin/probe-config", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeConfigHandler(repo)))
 	mux.Handle("/api/admin/probe-sync", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeSyncHandler(repo)))
 	mux.Handle("/api/rules/", auth.RequireAdmin(tokenStore, userRepo, http.StripPrefix("/api/rules/", handler.NewRuleEditorHandler(subscribeDir, repo))))
@@ -88,6 +91,9 @@ func main() {
 	mux.Handle("/api/traffic/summary", auth.RequireToken(tokenStore, trafficHandler))
 	mux.Handle("/api/subscriptions", auth.RequireToken(tokenStore, handler.NewSubscriptionListHandler(repo)))
 	mux.Handle("/api/rules/latest", auth.RequireToken(tokenStore, handler.NewRuleMetadataHandler(subscribeDir, repo)))
+	mux.Handle("/api/nodes", auth.RequireToken(tokenStore, handler.NewNodesHandler(repo)))
+	mux.Handle("/api/nodes/", auth.RequireToken(tokenStore, handler.NewNodesHandler(repo)))
+	mux.Handle("/api/subscribe-files", auth.RequireToken(tokenStore, handler.NewSubscribeFilesListHandler(repo)))
 	mux.Handle("/api/clash/subscribe", handler.NewSubscriptionEndpoint(tokenStore, repo, subscribeDir))
 	mux.Handle("/", web.Handler())
 
@@ -209,5 +215,68 @@ func ensureDefaultSubscriptions(repo *storage.TrafficRepository) {
 		if _, err := repo.CreateSubscriptionLink(ctx, item); err != nil {
 			log.Printf("failed to create default subscription %s: %v", item.Name, err)
 		}
+	}
+}
+
+// syncSubscribeFilesToDatabase scans the subscribes directory and ensures
+// every YAML file has a corresponding record in the subscribe_files table.
+// This helps with backward compatibility when upgrading from older versions.
+func syncSubscribeFilesToDatabase(repo *storage.TrafficRepository, subscribeDir string) {
+	if repo == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Read all files from subscribes directory
+	entries, err := os.ReadDir(subscribeDir)
+	if err != nil {
+		log.Printf("warning: failed to read subscribes directory: %v", err)
+		return
+	}
+
+	synced := 0
+	for _, entry := range entries {
+		// Skip directories and non-YAML files
+		if entry.IsDir() {
+			continue
+		}
+		filename := entry.Name()
+		if filepath.Ext(filename) != ".yaml" && filepath.Ext(filename) != ".yml" {
+			continue
+		}
+
+		// Check if this file already has a database record
+		if _, err := repo.GetSubscribeFileByFilename(ctx, filename); err == nil {
+			// File already exists in database, skip
+			continue
+		} else if !errors.Is(err, storage.ErrSubscribeFileNotFound) {
+			log.Printf("warning: failed to check subscribe file %s: %v", filename, err)
+			continue
+		}
+
+		// File doesn't exist in database, create a new record
+		// Use filename without extension as the name
+		name := filename[:len(filename)-len(filepath.Ext(filename))]
+
+		file := storage.SubscribeFile{
+			Name:        name,
+			Description: "自动同步的订阅文件",
+			URL:         "",                         // No URL for legacy files
+			Type:        storage.SubscribeTypeUpload, // Mark as upload type
+			Filename:    filename,
+		}
+
+		if _, err := repo.CreateSubscribeFile(ctx, file); err != nil {
+			log.Printf("warning: failed to sync subscribe file %s to database: %v", filename, err)
+			continue
+		}
+
+		synced++
+	}
+
+	if synced > 0 {
+		log.Printf("synced %d subscribe file(s) from directory to database", synced)
 	}
 }

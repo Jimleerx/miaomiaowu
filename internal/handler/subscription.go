@@ -130,17 +130,40 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	link, err := h.resolveSubscription(r.Context(), strings.TrimSpace(r.URL.Query().Get("t")))
-	if err != nil {
-		if errors.Is(err, storage.ErrSubscriptionNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	// Get filename from query parameter (new approach, replacing 't' parameter)
+	filename := strings.TrimSpace(r.URL.Query().Get("filename"))
+	var subscribeFile storage.SubscribeFile
+	var displayName string
+
+	if filename != "" {
+		// New approach: direct filename from subscribe_files table
+		subscribeFile, err = h.repo.GetSubscribeFileByFilename(r.Context(), filename)
+		if err != nil {
+			if errors.Is(err, storage.ErrSubscribeFileNotFound) {
+				writeError(w, http.StatusNotFound, errors.New("subscription file not found"))
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		displayName = subscribeFile.Name
+	} else {
+		// Fallback: try legacy 't' parameter for backward compatibility
+		legacyName := strings.TrimSpace(r.URL.Query().Get("t"))
+		link, err := h.resolveSubscription(r.Context(), legacyName)
+		if err != nil {
+			if errors.Is(err, storage.ErrSubscriptionNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		filename = link.RuleFilename
+		displayName = link.Name
 	}
 
-	cleanedName := filepath.Clean(link.RuleFilename)
+	cleanedName := filepath.Clean(filename)
 	if strings.HasPrefix(cleanedName, "..") {
 		writeError(w, http.StatusBadRequest, errors.New("invalid rule filename"))
 		return
@@ -159,11 +182,11 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	headerValue := buildSubscriptionHeader(totalLimit, totalUsed)
-	ext := filepath.Ext(link.RuleFilename)
+	ext := filepath.Ext(filename)
 	if ext == "" {
 		ext = ".yaml"
 	}
-	attachmentName := url.PathEscape("妙妙屋-" + link.Name + ext)
+	attachmentName := url.PathEscape("妙妙屋-" + displayName + ext)
 
 	w.Header().Set("Content-Type", "application/octet-stream; charset=UTF-8")
 	w.Header().Set("subscription-userinfo", headerValue)
