@@ -141,13 +141,16 @@ func scanProbeServer(scanner rowScanner) (ProbeServer, error) {
 }
 
 var (
-	ErrTokenNotFound        = errors.New("token not found")
-	ErrUserNotFound         = errors.New("user not found")
-	ErrUserExists           = errors.New("user already exists")
-	ErrRuleVersionNotFound  = errors.New("rule version not found")
-	ErrSubscriptionNotFound = errors.New("subscription link not found")
-	ErrSubscriptionExists   = errors.New("subscription link already exists")
-	ErrProbeConfigNotFound  = errors.New("probe configuration not found")
+	ErrTokenNotFound         = errors.New("token not found")
+	ErrUserNotFound          = errors.New("user not found")
+	ErrUserExists            = errors.New("user already exists")
+	ErrRuleVersionNotFound   = errors.New("rule version not found")
+	ErrSubscriptionNotFound  = errors.New("subscription link not found")
+	ErrSubscriptionExists    = errors.New("subscription link already exists")
+	ErrProbeConfigNotFound   = errors.New("probe configuration not found")
+	ErrNodeNotFound          = errors.New("node not found")
+	ErrSubscribeFileNotFound = errors.New("subscribe file not found")
+	ErrSubscribeFileExists   = errors.New("subscribe file already exists")
 )
 
 var (
@@ -192,6 +195,32 @@ type ProbeServer struct {
 	Position            int
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+}
+
+// Node represents a proxy node stored in the database.
+type Node struct {
+	ID           int64
+	Username     string
+	RawURL       string
+	NodeName     string
+	Protocol     string
+	ParsedConfig string
+	ClashConfig  string
+	Enabled      bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// SubscribeFile represents a subscription file configuration.
+type SubscribeFile struct {
+	ID          int64
+	Name        string
+	Description string
+	URL         string
+	Type        string
+	Filename    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 var (
@@ -402,6 +431,47 @@ CREATE TABLE IF NOT EXISTS probe_servers (
 
 	if err := r.ensureDefaultProbeConfig(); err != nil {
 		return err
+	}
+
+	const nodesSchema = `
+CREATE TABLE IF NOT EXISTS nodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    raw_url TEXT NOT NULL,
+    node_name TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    parsed_config TEXT NOT NULL,
+    clash_config TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_nodes_username ON nodes(username);
+CREATE INDEX IF NOT EXISTS idx_nodes_protocol ON nodes(protocol);
+CREATE INDEX IF NOT EXISTS idx_nodes_enabled ON nodes(enabled);
+`
+
+	if _, err := r.db.Exec(nodesSchema); err != nil {
+		return fmt.Errorf("migrate nodes: %w", err)
+	}
+
+	const subscribeFilesSchema = `
+CREATE TABLE IF NOT EXISTS subscribe_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    url TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('create','import','upload')),
+    filename TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(name)
+);
+CREATE INDEX IF NOT EXISTS idx_subscribe_files_type ON subscribe_files(type);
+`
+
+	if _, err := r.db.Exec(subscribeFilesSchema); err != nil {
+		return fmt.Errorf("migrate subscribe_files: %w", err)
 	}
 
 	return nil

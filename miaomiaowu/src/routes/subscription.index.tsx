@@ -35,19 +35,15 @@ export const Route = createFileRoute('/subscription/')({
   component: SubscriptionPage,
 })
 
-type RuleMetadataItem = {
-  name: string
-  latest_version: number
-  updated_at?: string
-  mod_time: number
-}
-
-type SubscriptionRecord = {
+type SubscribeFile = {
   id: number
   name: string
   description: string
-  rule_filename: string
-  buttons: string[]
+  url: string
+  type: string
+  filename: string
+  created_at: string
+  updated_at: string
 }
 
 const ICON_MAP: Record<string, any> = {
@@ -72,56 +68,17 @@ function SubscriptionPage() {
 
   const userToken = tokenData?.token ?? ''
 
-  const { data: subscriptionData } = useQuery({
-    queryKey: ['subscriptions'],
+  const { data: subscribeFilesData } = useQuery({
+    queryKey: ['subscribe-files'],
     queryFn: async () => {
-      const response = await api.get('/api/subscriptions')
-      return response.data as { subscriptions: SubscriptionRecord[] }
+      const response = await api.get('/api/subscribe-files')
+      return response.data as { files: SubscribeFile[] }
     },
     enabled: Boolean(auth.accessToken),
     staleTime: 60 * 1000,
   })
 
-  const subscriptions = subscriptionData?.subscriptions ?? []
-
-  const ruleFiles = useMemo(() => {
-    const unique = new Set<string>()
-    for (const item of subscriptions) {
-      if (item.rule_filename) {
-        unique.add(item.rule_filename)
-      }
-    }
-    return Array.from(unique)
-  }, [subscriptions])
-
-  const { data: ruleMetadata } = useQuery({
-    queryKey: ['rule-metadata', ruleFiles],
-    queryFn: async () => {
-      const params = new URLSearchParams()
-      for (const file of ruleFiles) {
-        params.append('file', file)
-      }
-      const response = await api.get(`/api/rules/latest?${params.toString()}`)
-      return response.data as {
-        rules: Array<{
-          name: string
-          latest_version: number
-          updated_at?: string
-          mod_time: number
-        }>
-      }
-    },
-    enabled: Boolean(auth.accessToken && ruleFiles.length > 0),
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const metadataMap = useMemo(() => {
-    const map: Record<string, RuleMetadataItem> = {}
-    for (const item of ruleMetadata?.rules ?? []) {
-      map[item.name] = item
-    }
-    return map
-  }, [ruleMetadata])
+  const subscribeFiles = subscribeFilesData?.files ?? []
 
   const dateFormatter = useMemo(
     () =>
@@ -139,11 +96,10 @@ function SubscriptionPage() {
       ? `${window.location.protocol}//${window.location.host}`
       : 'http://localhost:8080')
 
-  const buildSubscriptionURL = (name: string) => {
+  const buildSubscriptionURL = (filename: string) => {
+    // Build URL with filename and user token for authentication
     const url = new URL('/api/clash/subscribe', baseURL)
-    if (name) {
-      url.searchParams.set('t', name)
-    }
+    url.searchParams.set('filename', filename)
     if (userToken) {
       url.searchParams.set('token', userToken)
     }
@@ -174,7 +130,7 @@ function SubscriptionPage() {
         </section>
 
         <section className='mt-8 grid gap-6 lg:grid-cols-3'>
-          {subscriptions.length === 0 ? (
+          {subscribeFiles.length === 0 ? (
             <Card className='lg:col-span-3 border-dashed shadow-none'>
               <CardHeader>
                 <CardTitle>暂无订阅链接</CardTitle>
@@ -183,35 +139,31 @@ function SubscriptionPage() {
             </Card>
           ) : null}
 
-          {subscriptions.map((subscription) => {
-            const Icon = ICON_MAP[subscription.name] ?? QrCode
-            const subscribeURL = buildSubscriptionURL(subscription.name)
+          {subscribeFiles.map((file) => {
+            const Icon = ICON_MAP[file.name] ?? QrCode
+            const subscribeURL = buildSubscriptionURL(file.filename)
             const clashURL = `clash://install-config?url=${encodeURIComponent(subscribeURL)}`
-            const meta = metadataMap[subscription.rule_filename]
-            const updatedLabel = meta?.updated_at
-              ? dateFormatter.format(new Date(meta.updated_at))
-              : meta?.mod_time
-                ? dateFormatter.format(new Date(meta.mod_time * 1000))
-                : null
-            const buttonSet = new Set(subscription.buttons ?? [])
-            const showQR = buttonSet.has('qr')
-            const showCopy = buttonSet.has('copy')
-            const showImport = buttonSet.has('import')
+            const updatedLabel = file.updated_at
+              ? dateFormatter.format(new Date(file.updated_at))
+              : null
+            // All subscribe files show all buttons by default
+            const showQR = true
+            const showCopy = true
+            const showImport = true
 
             return (
-              <Card key={subscription.id} className='flex min-w-[320px] flex-col justify-between'>
+              <Card key={file.id} className='flex min-w-[320px] flex-col justify-between'>
                 <CardHeader>
                   <div className='flex items-start gap-3'>
                     <div className='flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary'>
                       <Icon className='size-6' />
                     </div>
                     <div className='space-y-1 text-left'>
-                      <CardTitle className='text-lg'>{subscription.name}</CardTitle>
-                      <CardDescription>{subscription.description || '—'}</CardDescription>
-                      {meta ? (
+                      <CardTitle className='text-lg'>{file.name}</CardTitle>
+                      <CardDescription>{file.description || '—'}</CardDescription>
+                      {updatedLabel ? (
                         <p className='text-xs text-muted-foreground'>
-                          最新版本：{meta.latest_version > 0 ? `v${meta.latest_version}` : `暂无历史`}
-                          {updatedLabel ? ` · 更新时间：${updatedLabel}` : ``}
+                          更新时间：{updatedLabel}
                         </p>
                       ) : null}
                     </div>

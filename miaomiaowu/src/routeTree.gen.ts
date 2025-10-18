@@ -11,13 +11,18 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as SubscriptionRouteImport } from './routes/subscription'
+import { Route as SubscribeFilesRouteImport } from './routes/subscribe-files'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as ProbeRouteImport } from './routes/probe'
+import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SubscriptionIndexRouteImport } from './routes/subscription.index'
+import { Route as SubscribeFilesIndexRouteImport } from './routes/subscribe-files.index'
+import { Route as NodesIndexRouteImport } from './routes/nodes.index'
 import { Route as SubscriptionManageRouteImport } from './routes/subscription.manage'
+import { Route as SubscribeFilesCustomRouteImport } from './routes/subscribe-files.custom'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -27,6 +32,11 @@ const UsersRoute = UsersRouteImport.update({
 const SubscriptionRoute = SubscriptionRouteImport.update({
   id: '/subscription',
   path: '/subscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubscribeFilesRoute = SubscribeFilesRouteImport.update({
+  id: '/subscribe-files',
+  path: '/subscribe-files',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -44,6 +54,11 @@ const ProbeRoute = ProbeRouteImport.update({
   path: '/probe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NodesRoute = NodesRouteImport.update({
+  id: '/nodes',
+  path: '/nodes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
@@ -59,21 +74,41 @@ const SubscriptionIndexRoute = SubscriptionIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SubscriptionRoute,
 } as any)
+const SubscribeFilesIndexRoute = SubscribeFilesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SubscribeFilesRoute,
+} as any)
+const NodesIndexRoute = NodesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => NodesRoute,
+} as any)
 const SubscriptionManageRoute = SubscriptionManageRouteImport.update({
   id: '/manage',
   path: '/manage',
   getParentRoute: () => SubscriptionRoute,
 } as any)
+const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
+  id: '/custom',
+  path: '/custom',
+  getParentRoute: () => SubscribeFilesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/nodes': typeof NodesRouteWithChildren
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
+  '/subscribe-files': typeof SubscribeFilesRouteWithChildren
   '/subscription': typeof SubscriptionRouteWithChildren
   '/users': typeof UsersRoute
+  '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
   '/subscription/manage': typeof SubscriptionManageRoute
+  '/nodes/': typeof NodesIndexRoute
+  '/subscribe-files/': typeof SubscribeFilesIndexRoute
   '/subscription/': typeof SubscriptionIndexRoute
 }
 export interface FileRoutesByTo {
@@ -83,19 +118,27 @@ export interface FileRoutesByTo {
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
   '/users': typeof UsersRoute
+  '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
   '/subscription/manage': typeof SubscriptionManageRoute
+  '/nodes': typeof NodesIndexRoute
+  '/subscribe-files': typeof SubscribeFilesIndexRoute
   '/subscription': typeof SubscriptionIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/nodes': typeof NodesRouteWithChildren
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
+  '/subscribe-files': typeof SubscribeFilesRouteWithChildren
   '/subscription': typeof SubscriptionRouteWithChildren
   '/users': typeof UsersRoute
+  '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
   '/subscription/manage': typeof SubscriptionManageRoute
+  '/nodes/': typeof NodesIndexRoute
+  '/subscribe-files/': typeof SubscribeFilesIndexRoute
   '/subscription/': typeof SubscriptionIndexRoute
 }
 export interface FileRouteTypes {
@@ -103,12 +146,17 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/change-password'
+    | '/nodes'
     | '/probe'
     | '/rules'
     | '/settings'
+    | '/subscribe-files'
     | '/subscription'
     | '/users'
+    | '/subscribe-files/custom'
     | '/subscription/manage'
+    | '/nodes/'
+    | '/subscribe-files/'
     | '/subscription/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -118,27 +166,37 @@ export interface FileRouteTypes {
     | '/rules'
     | '/settings'
     | '/users'
+    | '/subscribe-files/custom'
     | '/subscription/manage'
+    | '/nodes'
+    | '/subscribe-files'
     | '/subscription'
   id:
     | '__root__'
     | '/'
     | '/change-password'
+    | '/nodes'
     | '/probe'
     | '/rules'
     | '/settings'
+    | '/subscribe-files'
     | '/subscription'
     | '/users'
+    | '/subscribe-files/custom'
     | '/subscription/manage'
+    | '/nodes/'
+    | '/subscribe-files/'
     | '/subscription/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  NodesRoute: typeof NodesRouteWithChildren
   ProbeRoute: typeof ProbeRoute
   RulesRoute: typeof RulesRoute
   SettingsRoute: typeof SettingsRoute
+  SubscribeFilesRoute: typeof SubscribeFilesRouteWithChildren
   SubscriptionRoute: typeof SubscriptionRouteWithChildren
   UsersRoute: typeof UsersRoute
 }
@@ -157,6 +215,13 @@ declare module '@tanstack/react-router' {
       path: '/subscription'
       fullPath: '/subscription'
       preLoaderRoute: typeof SubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscribe-files': {
+      id: '/subscribe-files'
+      path: '/subscribe-files'
+      fullPath: '/subscribe-files'
+      preLoaderRoute: typeof SubscribeFilesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -180,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProbeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/nodes': {
+      id: '/nodes'
+      path: '/nodes'
+      fullPath: '/nodes'
+      preLoaderRoute: typeof NodesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/change-password': {
       id: '/change-password'
       path: '/change-password'
@@ -201,6 +273,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubscriptionIndexRouteImport
       parentRoute: typeof SubscriptionRoute
     }
+    '/subscribe-files/': {
+      id: '/subscribe-files/'
+      path: '/'
+      fullPath: '/subscribe-files/'
+      preLoaderRoute: typeof SubscribeFilesIndexRouteImport
+      parentRoute: typeof SubscribeFilesRoute
+    }
+    '/nodes/': {
+      id: '/nodes/'
+      path: '/'
+      fullPath: '/nodes/'
+      preLoaderRoute: typeof NodesIndexRouteImport
+      parentRoute: typeof NodesRoute
+    }
     '/subscription/manage': {
       id: '/subscription/manage'
       path: '/manage'
@@ -208,8 +294,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubscriptionManageRouteImport
       parentRoute: typeof SubscriptionRoute
     }
+    '/subscribe-files/custom': {
+      id: '/subscribe-files/custom'
+      path: '/custom'
+      fullPath: '/subscribe-files/custom'
+      preLoaderRoute: typeof SubscribeFilesCustomRouteImport
+      parentRoute: typeof SubscribeFilesRoute
+    }
   }
 }
+
+interface NodesRouteChildren {
+  NodesIndexRoute: typeof NodesIndexRoute
+}
+
+const NodesRouteChildren: NodesRouteChildren = {
+  NodesIndexRoute: NodesIndexRoute,
+}
+
+const NodesRouteWithChildren = NodesRoute._addFileChildren(NodesRouteChildren)
+
+interface SubscribeFilesRouteChildren {
+  SubscribeFilesCustomRoute: typeof SubscribeFilesCustomRoute
+  SubscribeFilesIndexRoute: typeof SubscribeFilesIndexRoute
+}
+
+const SubscribeFilesRouteChildren: SubscribeFilesRouteChildren = {
+  SubscribeFilesCustomRoute: SubscribeFilesCustomRoute,
+  SubscribeFilesIndexRoute: SubscribeFilesIndexRoute,
+}
+
+const SubscribeFilesRouteWithChildren = SubscribeFilesRoute._addFileChildren(
+  SubscribeFilesRouteChildren,
+)
 
 interface SubscriptionRouteChildren {
   SubscriptionManageRoute: typeof SubscriptionManageRoute
@@ -228,9 +345,11 @@ const SubscriptionRouteWithChildren = SubscriptionRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  NodesRoute: NodesRouteWithChildren,
   ProbeRoute: ProbeRoute,
   RulesRoute: RulesRoute,
   SettingsRoute: SettingsRoute,
+  SubscribeFilesRoute: SubscribeFilesRouteWithChildren,
   SubscriptionRoute: SubscriptionRouteWithChildren,
   UsersRoute: UsersRoute,
 }
