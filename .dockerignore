@@ -30,8 +30,7 @@ Thumbs.db
 # Data
 *.db
 *.sqlite
-subscribes/*.yaml
-subscribes/*.yml
+# Note: subscribes/*.yaml files are needed for go:embed, so don't exclude them
 
 # Logs
 *.log
