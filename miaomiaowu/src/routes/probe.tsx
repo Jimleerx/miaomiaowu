@@ -159,10 +159,14 @@ function ProbeManagePage() {
 
   const lastUpdated = useMemo(() => {
     const updatedAt = configData?.config?.updated_at
-    if (!updatedAt) {
+    if (!updatedAt || updatedAt === '' || updatedAt.startsWith('0001-01-01')) {
       return null
     }
-    return dateFormatter.format(new Date(updatedAt))
+    const date = new Date(updatedAt)
+    if (isNaN(date.getTime())) {
+      return null
+    }
+    return dateFormatter.format(date)
   }, [configData, dateFormatter])
 
   const mutation = useMutation({

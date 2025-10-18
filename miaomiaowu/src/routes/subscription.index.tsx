@@ -69,16 +69,16 @@ function SubscriptionPage() {
   const userToken = tokenData?.token ?? ''
 
   const { data: subscribeFilesData } = useQuery({
-    queryKey: ['subscribe-files'],
+    queryKey: ['user-subscriptions'],
     queryFn: async () => {
-      const response = await api.get('/api/subscribe-files')
-      return response.data as { files: SubscribeFile[] }
+      const response = await api.get('/api/subscriptions')
+      return response.data as { subscriptions: SubscribeFile[] }
     },
     enabled: Boolean(auth.accessToken),
     staleTime: 60 * 1000,
   })
 
-  const subscribeFiles = subscribeFilesData?.files ?? []
+  const subscribeFiles = subscribeFilesData?.subscriptions ?? []
 
   const dateFormatter = useMemo(
     () =>
@@ -126,15 +126,14 @@ function SubscriptionPage() {
       <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
         <section className='space-y-4 text-center sm:text-left'>
           <h1 className='text-3xl font-semibold tracking-tight'>订阅链接</h1>
-          <p className='text-muted-foreground'>根据客户端选择对应的订阅地址，导入后即可同步最新的配置。</p>
         </section>
 
         <section className='mt-8 grid gap-6 lg:grid-cols-3'>
           {subscribeFiles.length === 0 ? (
             <Card className='lg:col-span-3 border-dashed shadow-none'>
               <CardHeader>
-                <CardTitle>暂无订阅链接</CardTitle>
-                <CardDescription>请联系管理员添加订阅配置。</CardDescription>
+                <CardTitle>暂无可用订阅</CardTitle>
+                <CardDescription>管理员尚未为您分配订阅链接，请联系管理员进行分配。</CardDescription>
               </CardHeader>
             </Card>
           ) : null}

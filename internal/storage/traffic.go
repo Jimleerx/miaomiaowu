@@ -474,6 +474,25 @@ CREATE INDEX IF NOT EXISTS idx_subscribe_files_type ON subscribe_files(type);
 		return fmt.Errorf("migrate subscribe_files: %w", err)
 	}
 
+	// 用户-订阅关联表（多对多关系）
+	// 关联到 subscribe_files 表
+	const userSubscriptionsSchema = `
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+    username TEXT NOT NULL,
+    subscription_id INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (username, subscription_id),
+    FOREIGN KEY(username) REFERENCES users(username) ON DELETE CASCADE,
+    FOREIGN KEY(subscription_id) REFERENCES subscribe_files(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_username ON user_subscriptions(username);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_subscription_id ON user_subscriptions(subscription_id);
+`
+
+	if _, err := r.db.Exec(userSubscriptionsSchema); err != nil {
+		return fmt.Errorf("migrate user_subscriptions: %w", err)
+	}
+
 	return nil
 }
 
@@ -1625,4 +1644,172 @@ func (r *TrafficRepository) CleanupExpiredSessions(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// AssignSubscriptionToUser assigns a subscription to a user.
+func (r *TrafficRepository) AssignSubscriptionToUser(ctx context.Context, username string, subscriptionID int64) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return errors.New("username is required")
+	}
+	if subscriptionID <= 0 {
+		return errors.New("invalid subscription ID")
+	}
+
+	_, err := r.db.ExecContext(ctx, `INSERT INTO user_subscriptions (username, subscription_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, username, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("assign subscription to user: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveSubscriptionFromUser removes a subscription assignment from a user.
+func (r *TrafficRepository) RemoveSubscriptionFromUser(ctx context.Context, username string, subscriptionID int64) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return errors.New("username is required")
+	}
+	if subscriptionID <= 0 {
+		return errors.New("invalid subscription ID")
+	}
+
+	_, err := r.db.ExecContext(ctx, `DELETE FROM user_subscriptions WHERE username = ? AND subscription_id = ?`, username, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("remove subscription from user: %w", err)
+	}
+
+	return nil
+}
+
+// GetUserSubscriptionIDs returns all subscription IDs assigned to a user.
+func (r *TrafficRepository) GetUserSubscriptionIDs(ctx context.Context, username string) ([]int64, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, errors.New("username is required")
+	}
+
+	const stmt = `SELECT subscription_id FROM user_subscriptions WHERE username = ? ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(ctx, stmt, username)
+	if err != nil {
+		return nil, fmt.Errorf("get user subscription IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan subscription ID: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate subscription IDs: %w", err)
+	}
+
+	return ids, nil
+}
+
+// SetUserSubscriptions replaces all subscriptions for a user with the provided list.
+func (r *TrafficRepository) SetUserSubscriptions(ctx context.Context, username string, subscriptionIDs []int64) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return errors.New("username is required")
+	}
+
+	// 使用事务确保原子性
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 删除用户的所有现有订阅
+	_, err = tx.ExecContext(ctx, `DELETE FROM user_subscriptions WHERE username = ?`, username)
+	if err != nil {
+		return fmt.Errorf("delete existing subscriptions: %w", err)
+	}
+
+	// 插入新的订阅
+	if len(subscriptionIDs) > 0 {
+		stmt, err := tx.PrepareContext(ctx, `INSERT INTO user_subscriptions (username, subscription_id) VALUES (?, ?)`)
+		if err != nil {
+			return fmt.Errorf("prepare insert statement: %w", err)
+		}
+		defer stmt.Close()
+
+		for _, id := range subscriptionIDs {
+			if id <= 0 {
+				continue
+			}
+			_, err = stmt.ExecContext(ctx, username, id)
+			if err != nil {
+				return fmt.Errorf("insert subscription %d: %w", id, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetUserSubscriptions returns all subscriptions assigned to a user.
+func (r *TrafficRepository) GetUserSubscriptions(ctx context.Context, username string) ([]SubscribeFile, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, errors.New("username is required")
+	}
+
+	const stmt = `
+		SELECT s.id, s.name, COALESCE(s.description, ''), COALESCE(s.url, ''), s.type, s.filename, s.created_at, s.updated_at
+		FROM subscribe_files s
+		INNER JOIN user_subscriptions us ON s.id = us.subscription_id
+		WHERE us.username = ?
+		ORDER BY s.created_at DESC
+	`
+	rows, err := r.db.QueryContext(ctx, stmt, username)
+	if err != nil {
+		return nil, fmt.Errorf("get user subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var subscriptions []SubscribeFile
+	for rows.Next() {
+		var sub SubscribeFile
+		if err := rows.Scan(&sub.ID, &sub.Name, &sub.Description, &sub.URL, &sub.Type, &sub.Filename, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan subscription: %w", err)
+		}
+		subscriptions = append(subscriptions, sub)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate subscriptions: %w", err)
+	}
+
+	return subscriptions, nil
 }

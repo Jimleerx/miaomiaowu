@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -31,6 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { api } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
 import { profileQueryFn } from '@/lib/profile'
@@ -65,6 +66,24 @@ type CreateState = {
   email: string
   nickname: string
   password: string
+  subscriptionIds: number[]
+}
+
+type SubscriptionManageState = {
+  username: string
+  selectedIds: number[]
+  initialized: boolean
+}
+
+type SubscribeFile = {
+  id: number
+  name: string
+  description?: string
+  type: string
+  filename: string
+  url: string
+  created_at?: string
+  updated_at?: string
 }
 
 const generatePassword = (length = 12) => {
@@ -82,7 +101,9 @@ function UsersPage() {
     email: '',
     nickname: '',
     password: generatePassword(),
+    subscriptionIds: [],
   })
+  const [subscriptionManageState, setSubscriptionManageState] = useState<SubscriptionManageState | null>(null)
 
   const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: ['profile'],
@@ -100,6 +121,27 @@ function UsersPage() {
       return response.data as { users: UserRow[] }
     },
     enabled: Boolean(isAdmin && auth.accessToken),
+    staleTime: 30 * 1000,
+  })
+
+  const subscriptionsQuery = useQuery({
+    queryKey: ['admin-all-subscriptions'],
+    queryFn: async () => {
+      const response = await api.get('/api/subscriptions')
+      return response.data?.subscriptions ?? []
+    },
+    enabled: Boolean(isAdmin && auth.accessToken),
+    staleTime: 60 * 1000,
+  })
+
+  const userSubscriptionsQuery = useQuery({
+    queryKey: ['user-subscriptions', subscriptionManageState?.username],
+    queryFn: async () => {
+      if (!subscriptionManageState?.username) return { subscription_ids: [] }
+      const response = await api.get(`/api/admin/users/${subscriptionManageState.username}/subscriptions`)
+      return response.data as { subscription_ids: number[] }
+    },
+    enabled: Boolean(subscriptionManageState?.username && isAdmin && auth.accessToken),
     staleTime: 30 * 1000,
   })
 
@@ -138,14 +180,29 @@ function UsersPage() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: CreateState) => {
-      const response = await api.post('/api/admin/users/create', payload)
-      return response.data as { username: string; email: string; nickname: string; role: string; password: string }
+      // 创建用户
+      const response = await api.post('/api/admin/users/create', {
+        username: payload.username,
+        email: payload.email,
+        nickname: payload.nickname,
+        password: payload.password,
+      })
+      const userData = response.data as { username: string; email: string; nickname: string; role: string; password: string }
+
+      // 如果选择了订阅，分配给用户
+      if (payload.subscriptionIds.length > 0) {
+        await api.put(`/api/admin/users/${userData.username}/subscriptions`, {
+          subscription_ids: payload.subscriptionIds,
+        })
+      }
+
+      return userData
     },
     onSuccess: (data) => {
       toast.success('用户已创建，初始密码已复制')
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setCreateOpen(false)
-      setCreateState({ username: '', email: '', nickname: '', password: generatePassword() })
+      setCreateState({ username: '', email: '', nickname: '', password: generatePassword(), subscriptionIds: [] })
 
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(data.password).catch(() => null)
@@ -156,7 +213,51 @@ function UsersPage() {
     },
   })
 
+  const updateSubscriptionsMutation = useMutation({
+    mutationFn: async (payload: { username: string; subscription_ids: number[] }) => {
+      await api.put(`/api/admin/users/${payload.username}/subscriptions`, {
+        subscription_ids: payload.subscription_ids,
+      })
+    },
+    onSuccess: (_, variables) => {
+      toast.success('订阅已更新')
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions', variables.username] })
+      setSubscriptionManageState(null)
+    },
+    onError: handleServerError,
+  })
+
+  const toggleSubscriptionSelection = (id: number, nextState?: boolean) => {
+    setSubscriptionManageState((prev) => {
+      if (!prev) return prev
+      const alreadySelected = prev.selectedIds.includes(id)
+      const shouldSelect = typeof nextState === 'boolean' ? nextState : !alreadySelected
+      if (shouldSelect === alreadySelected) {
+        if (!prev.initialized) {
+          return { ...prev, initialized: true }
+        }
+        return prev
+      }
+      const selectedIds = shouldSelect
+        ? [...prev.selectedIds, id]
+        : prev.selectedIds.filter((existingId) => existingId !== id)
+      return { ...prev, selectedIds, initialized: true }
+    })
+  }
+
   const users = useMemo(() => usersQuery.data?.users ?? [], [usersQuery.data])
+
+  useEffect(() => {
+    if (!subscriptionManageState || subscriptionManageState.initialized) return
+    if (!userSubscriptionsQuery.isSuccess) return
+    const serverIds = userSubscriptionsQuery.data?.subscription_ids ?? []
+    setSubscriptionManageState((prev) => {
+      if (!prev || prev.initialized || prev.username !== subscriptionManageState.username) {
+        return prev
+      }
+      return { ...prev, selectedIds: serverIds, initialized: true }
+    })
+  }, [subscriptionManageState, userSubscriptionsQuery.isSuccess, userSubscriptionsQuery.data])
 
   if (profileLoading) {
     return (
@@ -216,7 +317,7 @@ function UsersPage() {
               <Button
                 size='sm'
                 onClick={() => {
-                  setCreateState({ username: '', email: '', nickname: '', password: generatePassword() })
+                  setCreateState({ username: '', email: '', nickname: '', password: generatePassword(), subscriptionIds: [] })
                   setCreateOpen(true)
                 }}
               >
@@ -229,12 +330,12 @@ function UsersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className='w-[180px]'>用户名</TableHead>
-                    <TableHead className='w-[180px]'>昵称</TableHead>
-                    <TableHead className='w-[240px]'>邮箱</TableHead>
-                    <TableHead className='w-[140px] text-center'>角色</TableHead>
-                    <TableHead className='w-[140px] text-center'>状态</TableHead>
-                    <TableHead className='w-[160px] text-right'>操作</TableHead>
+                    <TableHead className='w-[160px]'>用户名</TableHead>
+                    <TableHead className='w-[160px]'>昵称</TableHead>
+                    <TableHead className='w-[200px]'>邮箱</TableHead>
+                    <TableHead className='w-[100px] text-center'>角色</TableHead>
+                    <TableHead className='w-[100px] text-center'>状态</TableHead>
+                    <TableHead className='w-[280px] text-right'>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -265,19 +366,34 @@ function UsersPage() {
                           {isAdminRow ? (
                             <span className='text-sm text-muted-foreground'>—</span>
                           ) : (
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              disabled={resetMutation.isPending}
-                              onClick={() =>
-                                setResetState({
-                                  username: user.username,
-                                  password: generatePassword(),
-                                })
-                              }
-                            >
-                              重置密码
-                            </Button>
+                            <div className='flex items-center justify-end gap-2'>
+                              <Button
+                                size='sm'
+                                variant='outline'
+                                disabled={resetMutation.isPending}
+                                onClick={() =>
+                                  setResetState({
+                                    username: user.username,
+                                    password: generatePassword(),
+                                  })
+                                }
+                              >
+                                重置密码
+                              </Button>
+                              <Button
+                                size='sm'
+                                variant='outline'
+                                onClick={() =>
+                                  setSubscriptionManageState({
+                                    username: user.username,
+                                    selectedIds: [],
+                                    initialized: false,
+                                  })
+                                }
+                              >
+                                管理订阅
+                              </Button>
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -291,7 +407,7 @@ function UsersPage() {
                     </TableRow>
                   ) : null}
       <Dialog open={createOpen} onOpenChange={(open) => setCreateOpen(open)}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent className='sm:max-w-lg max-h-[90vh] overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>新增用户</DialogTitle>
           </DialogHeader>
@@ -349,6 +465,44 @@ function UsersPage() {
                 }
               />
               <p className='text-xs text-muted-foreground'>默认生成随机密码，可在创建前自行调整。</p>
+            </div>
+            <div className='space-y-3'>
+              <Label>分配订阅（可选）</Label>
+              {subscriptionsQuery.isLoading ? (
+                <div className='text-sm text-muted-foreground'>加载订阅列表...</div>
+              ) : subscriptionsQuery.data && subscriptionsQuery.data.length > 0 ? (
+                <div className='space-y-2 max-h-60 overflow-y-auto border rounded-md p-3'>
+                  {subscriptionsQuery.data.map((sub) => (
+                    <div key={sub.id} className='flex items-start space-x-3 py-2'>
+                      <Checkbox
+                        id={`create-sub-${sub.id}`}
+                        checked={createState.subscriptionIds.includes(sub.id)}
+                        onCheckedChange={(checked) => {
+                          setCreateState((prev) => {
+                            const newIds = checked
+                              ? [...prev.subscriptionIds, sub.id]
+                              : prev.subscriptionIds.filter((id) => id !== sub.id)
+                            return { ...prev, subscriptionIds: newIds }
+                          })
+                        }}
+                      />
+                      <div className='grid gap-1.5 leading-none flex-1'>
+                        <label
+                          htmlFor={`create-sub-${sub.id}`}
+                          className='text-sm font-medium leading-none cursor-pointer'
+                        >
+                          {sub.name}
+                        </label>
+                        {sub.description && (
+                          <p className='text-sm text-muted-foreground'>{sub.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className='text-sm text-muted-foreground'>暂无可用订阅</div>
+              )}
             </div>
           </div>
           <DialogFooter className='gap-2'>
@@ -416,6 +570,110 @@ function UsersPage() {
               onClick={() => resetState && resetMutation.mutate(resetState)}
             >
               {resetMutation.isPending ? '重置中…' : '确认重置'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(subscriptionManageState)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSubscriptionManageState(null)
+          } else if (subscriptionManageState && userSubscriptionsQuery.data) {
+            setSubscriptionManageState((prev) => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                selectedIds: userSubscriptionsQuery.data?.subscription_ids ?? [],
+                initialized: true,
+              }
+            })
+          }
+        }}
+      >
+        <DialogContent className='sm:max-w-lg'>
+          <DialogHeader>
+            <DialogTitle>管理订阅</DialogTitle>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label>用户名</Label>
+              <Input value={subscriptionManageState?.username ?? ''} readOnly disabled />
+            </div>
+            <div className='space-y-3'>
+              <Label>可用订阅</Label>
+              {subscriptionsQuery.isLoading ? (
+                <div className='text-sm text-muted-foreground'>加载订阅列表...</div>
+              ) : subscriptionsQuery.data && subscriptionsQuery.data.length > 0 ? (
+                <div className='space-y-2 max-h-80 overflow-y-auto border rounded-md p-3'>
+                  {subscriptionsQuery.data.map((sub) => {
+                    const isChecked = subscriptionManageState?.selectedIds.includes(sub.id) ?? false
+                    return (
+                      <div
+                        key={sub.id}
+                        role='checkbox'
+                        tabIndex={0}
+                        aria-checked={isChecked}
+                        aria-labelledby={`sub-${sub.id}-label`}
+                        className='flex cursor-pointer items-start space-x-3 rounded-md px-3 py-2 transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+                        onClick={() => toggleSubscriptionSelection(sub.id)}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) {
+                            return
+                          }
+                          if (event.key === ' ' || event.key === 'Enter') {
+                            event.preventDefault()
+                            toggleSubscriptionSelection(sub.id)
+                          }
+                        }}
+                      >
+                        <div onClick={(event) => event.stopPropagation()} className='pt-0.5'>
+                          <Checkbox
+                            id={`sub-${sub.id}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => toggleSubscriptionSelection(sub.id, checked === true)}
+                          />
+                        </div>
+                        <div className='grid gap-1.5 leading-none flex-1'>
+                          <label
+                            id={`sub-${sub.id}-label`}
+                            className='text-sm font-medium leading-none cursor-pointer'
+                          >
+                            {sub.name}
+                          </label>
+                          {sub.description && (
+                            <p className='text-sm text-muted-foreground'>{sub.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className='text-sm text-muted-foreground'>暂无可用订阅</div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className='gap-2'>
+            <DialogClose asChild>
+              <Button type='button' variant='outline' disabled={updateSubscriptionsMutation.isPending}>
+                取消
+              </Button>
+            </DialogClose>
+            <Button
+              type='button'
+              disabled={!subscriptionManageState || updateSubscriptionsMutation.isPending}
+              onClick={() => {
+                if (subscriptionManageState) {
+                  updateSubscriptionsMutation.mutate({
+                    username: subscriptionManageState.username,
+                    subscription_ids: subscriptionManageState.selectedIds,
+                  })
+                }
+              }}
+            >
+              {updateSubscriptionsMutation.isPending ? '保存中…' : '确认保存'}
             </Button>
           </DialogFooter>
         </DialogContent>

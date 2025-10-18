@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"traffic-info/internal/auth"
 	"traffic-info/internal/storage"
 )
 
@@ -361,6 +362,7 @@ func convertSubscriptions(links []storage.SubscriptionLink) []subscriptionDTO {
 }
 
 // NewSubscriptionListHandler returns publicly accessible subscription metadata for authenticated users.
+// For admin users, returns all subscriptions. For regular users, returns only subscriptions assigned to them.
 func NewSubscriptionListHandler(repo *storage.TrafficRepository) http.Handler {
 	if repo == nil {
 		panic("subscription list handler requires repository")
@@ -372,28 +374,54 @@ func NewSubscriptionListHandler(repo *storage.TrafficRepository) http.Handler {
 			return
 		}
 
-		links, err := repo.ListSubscriptionLinks(r.Context())
+		// Get username from context
+		username := auth.UsernameFromContext(r.Context())
+		if username == "" {
+			writeError(w, http.StatusUnauthorized, errors.New("username not found in context"))
+			return
+		}
+
+		// Get user to check role
+		user, err := repo.GetUser(r.Context(), username)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
-		type item struct {
-			ID           int64    `json:"id"`
-			Name         string   `json:"name"`
-			Description  string   `json:"description"`
-			RuleFilename string   `json:"rule_filename"`
-			Buttons      []string `json:"buttons"`
+		var files []storage.SubscribeFile
+
+		// Admin users can see all subscriptions
+		if user.Role == storage.RoleAdmin {
+			files, err = repo.ListSubscribeFiles(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+		} else {
+			// Regular users can only see subscriptions assigned to them
+			files, err = repo.GetUserSubscriptions(r.Context(), username)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
 		}
 
-		payload := make([]item, 0, len(links))
-		for _, link := range links {
+		type item struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Filename    string `json:"filename"`
+			Type        string `json:"type"`
+		}
+
+		payload := make([]item, 0, len(files))
+		for _, file := range files {
 			payload = append(payload, item{
-				ID:           link.ID,
-				Name:         link.Name,
-				Description:  link.Description,
-				RuleFilename: link.RuleFilename,
-				Buttons:      append([]string(nil), link.Buttons...),
+				ID:          file.ID,
+				Name:        file.Name,
+				Description: file.Description,
+				Filename:    file.Filename,
+				Type:        file.Type,
 			})
 		}
 
