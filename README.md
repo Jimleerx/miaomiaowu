@@ -22,9 +22,93 @@
 账户/密码: test / test123
 
 
-### 安装部署
+## 安装部署
 
-#### 方式 1：一键安装（推荐 - Linux）
+### 方式 1：Docker 部署（推荐）
+
+使用 Docker 是最简单快捷的部署方式，无需配置任何依赖环境。
+
+#### 基础部署
+
+```bash
+docker run -d \
+  --name miaomiaowu \
+  -p 8080:8080 \
+  -v ./traffic-info-data:/app/data \
+  -v ./subscribes:/app/subscribes \
+  ghcr.io/jimleerx/miaomiaowu:latest
+```
+
+说明：
+- `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
+- `-v ./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `-v ./subscribes:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `-e JWT_SECRET=your-secret` 可选参数，配置token密钥，建议改成随机字符串
+- 其他环境变量（如 `LOG_LEVEL`）同下文“环境变量”章节，可通过 `-e` 继续添加。
+
+更新镜像后可执行：
+```bash
+docker pull ghcr.io/jimleerx/miaomiaowu:latest
+docker stop traffic-info && docker rm traffic-info
+```
+然后按照上方命令重新启动服务。
+
+#### Docker Compose 部署
+
+创建 `docker-compose.yml` 文件：
+
+```yaml
+version: '3.8'
+
+services:
+  miaomiaowu:
+    image: ghcr.io/jimleerx/miaomiaowu:latest
+    container_name: miaomiaowu
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./traffic-info-data:/app/data
+      - ./subscribes:/app/subscribes
+    environment:
+      - JWT_SECRET=your-custom-secret-key
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+```
+
+启动服务：
+
+```bash
+docker-compose up -d
+```
+
+查看日志：
+
+```bash
+docker-compose logs -f
+```
+
+停止服务：
+
+```bash
+docker-compose down
+```
+
+#### 数据持久化说明
+
+容器使用两个数据卷进行数据持久化：
+
+- `/app/data` - 存储 SQLite 数据库文件
+- `/app/subscribes` - 存储订阅规则配置文件
+
+**重要提示**：请确保定期备份这两个目录的数据。
+
+### 方式 2：一键安装（Linux）
 
 **自动安装为 systemd 服务（Debian/Ubuntu）：**
 ```bash
@@ -43,7 +127,7 @@ curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-instal
 ./traffic-info
 ```
 
-#### 方式 2：手动安装
+### 方式 3：二进制文件部署
 
 **Linux：**
 ```bash
@@ -65,7 +149,6 @@ chmod +x traffic-info-linux-amd64
 # 双击运行或在命令行中执行
 .\traffic-info-windows-amd64.exe
 ```
-
 ### 页面截图
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic_info.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_url.png)  

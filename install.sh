@@ -6,7 +6,7 @@
 set -e
 
 # 配置
-VERSION="v0.0.3"
+VERSION="v0.0.4"
 GITHUB_REPO="Jimleerx/miaomiaowu"
 BINARY_NAME="traffic-info-linux-amd64"
 INSTALL_DIR="/usr/local/bin"
