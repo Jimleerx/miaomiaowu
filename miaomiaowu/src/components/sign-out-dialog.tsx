@@ -31,6 +31,7 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
       title='退出登录'
       desc='确定要退出登录吗？退出后需要重新登录才能访问控制台。'
       confirmText='确认退出'
+      cancelBtnText='取消'
       handleConfirm={handleSignOut}
       className='sm:max-w-sm'
     />
