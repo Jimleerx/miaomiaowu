@@ -66,6 +66,32 @@ chmod +x traffic-info-linux-amd64
 .\traffic-info-windows-amd64.exe
 ```
 
+#### 方式 3：Docker 部署
+
+使用官方镜像 `ghcr.io/jimleerx/miaomiaowu:latest` 一键运行：
+```bash
+docker run -d \
+  --name traffic-info \
+  -p 8080:8080 \
+  -v ./traffic-info-data:/app/data \
+  -v ./subscribes:/app/subscribes \
+  ghcr.io/jimleerx/miaomiaowu:latest
+```
+
+说明：
+- `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
+- `-v ./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `-v ./subscribes:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `-e JWT_SECRET=your-secret` 可选参数，配置token密钥，建议改成随机字符串
+- 其他环境变量（如 `LOG_LEVEL`）同下文“环境变量”章节，可通过 `-e` 继续添加。
+
+更新镜像后可执行：
+```bash
+docker pull ghcr.io/jimleerx/miaomiaowu:latest
+docker stop traffic-info && docker rm traffic-info
+```
+然后按照上方命令重新启动服务。
+
 ### 页面截图
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic_info.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_url.png)  
