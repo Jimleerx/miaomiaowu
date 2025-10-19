@@ -40,7 +40,6 @@ func (h *subscribeFilesListHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 			ID:          file.ID,
 			Name:        file.Name,
 			Description: file.Description,
-			URL:         file.URL,
 			Type:        file.Type,
 			Filename:    file.Filename,
 			CreatedAt:   file.CreatedAt,

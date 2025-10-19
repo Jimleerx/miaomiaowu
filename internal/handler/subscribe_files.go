@@ -452,7 +452,6 @@ type subscribeFileDTO struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
-	URL         string    `json:"url"`
 	Type        string    `json:"type"`
 	Filename    string    `json:"filename"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -464,7 +463,6 @@ func convertSubscribeFile(file storage.SubscribeFile) subscribeFileDTO {
 		ID:          file.ID,
 		Name:        file.Name,
 		Description: file.Description,
-		URL:         file.URL,
 		Type:        file.Type,
 		Filename:    file.Filename,
 		CreatedAt:   file.CreatedAt,

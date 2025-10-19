@@ -39,7 +39,6 @@ type SubscribeFile = {
   id: number
   name: string
   description: string
-  url: string
   type: string
   filename: string
   created_at: string

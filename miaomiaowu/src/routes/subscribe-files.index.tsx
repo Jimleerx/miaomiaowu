@@ -32,7 +32,6 @@ type SubscribeFile = {
   id: number
   name: string
   description: string
-  url: string
   type: 'create' | 'import' | 'upload'
   filename: string
   created_at: string
@@ -102,6 +101,7 @@ function SubscribeFilesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscribe-files'] })
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] })
       toast.success('订阅导入成功')
       setImportDialogOpen(false)
       setImportForm({ name: '', description: '', url: '', filename: '' })
@@ -133,6 +133,7 @@ function SubscribeFilesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscribe-files'] })
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] })
       toast.success('文件上传成功')
       setUploadDialogOpen(false)
       setUploadForm({ name: '', description: '', filename: '' })
@@ -150,6 +151,7 @@ function SubscribeFilesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscribe-files'] })
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] })
       toast.success('订阅已删除')
     },
     onError: (error: any) => {
@@ -443,7 +445,6 @@ function SubscribeFilesPage() {
                     <TableRow>
                       <TableHead>订阅名称</TableHead>
                       <TableHead>说明</TableHead>
-                      <TableHead>链接地址</TableHead>
                       <TableHead>类型</TableHead>
                       <TableHead>文件名</TableHead>
                       <TableHead className='text-center'>操作</TableHead>
@@ -456,11 +457,6 @@ function SubscribeFilesPage() {
                         <TableCell>
                           <div className='max-w-[200px] truncate text-sm text-muted-foreground'>
                             {file.description || '-'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className='max-w-[300px] truncate text-sm font-mono'>
-                            {file.url || '-'}
                           </div>
                         </TableCell>
                         <TableCell>
