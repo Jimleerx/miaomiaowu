@@ -276,11 +276,12 @@ function SubscribeFilesPage() {
   return (
     <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
       <section className='space-y-4'>
-        <div className='flex items-center justify-between'>
-          <div>
-            <h1 className='text-3xl font-semibold tracking-tight'>订阅管理</h1>
+        <div className='flex flex-col gap-3 sm:gap-4'>
+          <h1 className='text-3xl font-semibold tracking-tight'>订阅管理</h1>
+
+          <div className='flex gap-2'>
             <p className='text-muted-foreground mt-2'>
-              管理 Clash 订阅文件，支持从链接导入或上传本地文件
+              从Clash订阅链接导入或上传本地文件
             </p>
           </div>
 

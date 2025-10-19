@@ -35,10 +35,12 @@ export function ThemeSwitch() {
         <Button
           variant='outline'
           size='sm'
-          className='min-w-[90px] justify-start gap-3 px-3 py-2 text-sm font-semibold uppercase tracking-widest'
+          aria-label='主题切换'
+          className='h-9 w-9 min-w-0 justify-center gap-0 p-0 has-[>svg]:px-0 has-[>svg]:py-0 text-sm font-semibold uppercase tracking-widest sm:w-auto sm:min-w-[90px] sm:px-3 sm:py-2 sm:gap-3 sm:has-[>svg]:px-3 sm:has-[>svg]:py-2 sm:justify-start'
         >
           <Icon className='size-[18px]' />
-          <span>{displayText}</span>
+          <span className='sr-only'>{displayText}</span>
+          <span className='hidden sm:inline'>{displayText}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end'>

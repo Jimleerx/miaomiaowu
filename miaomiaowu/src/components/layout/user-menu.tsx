@@ -39,14 +39,15 @@ export function UserMenu() {
           <Button
             variant='outline'
             size='sm'
-            className='min-w-[120px] justify-center gap-2 px-2 py-2 overflow-hidden'
+            aria-label={`用户菜单: ${displayName}`}
+            className='h-9 min-w-0 justify-center gap-2 px-2 py-2 overflow-hidden sm:min-w-[120px] sm:gap-2 sm:px-3'
           >
-            <span className='sr-only'>用户菜单</span>
+            <span className='sr-only'>{`用户菜单: ${displayName}`}</span>
             <Avatar className='size-7 border-[1.5px] border-[color:rgba(241,140,110,0.45)] shadow-[2px_2px_0_rgba(0,0,0,0.2)]'>
               <AvatarImage src={avatarSrc} alt={displayName} />
               <AvatarFallback>{fallbackText || '用户'}</AvatarFallback>
             </Avatar>
-            <div className='flex flex-col items-center leading-tight'>
+            <div className='hidden sm:flex sm:flex-col sm:items-center sm:leading-tight'>
               <span className='text-sm font-semibold truncate max-w-[70px]'>{displayName}</span>
               <span className='text-xs uppercase tracking-[0.2em] text-muted-foreground'>
                 {levelText}

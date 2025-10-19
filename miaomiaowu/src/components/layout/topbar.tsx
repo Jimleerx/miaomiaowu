@@ -5,6 +5,7 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import { UserMenu } from './user-menu'
 import { useAuthStore } from '@/stores/auth-store'
 import { profileQueryFn } from '@/lib/profile'
+import { cn } from '@/lib/utils'
 
 const baseNavLinks = [
   {
@@ -56,7 +57,8 @@ export function Topbar() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const navLinks = profile?.is_admin ? [...baseNavLinks, ...adminNavLinks] : baseNavLinks
+  const isAdmin = Boolean(profile?.is_admin)
+  const navLinks = isAdmin ? [...baseNavLinks, ...adminNavLinks] : baseNavLinks
 
   return (
     <header className='border-b border-[color:rgba(241,140,110,0.22)] bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
@@ -80,7 +82,10 @@ export function Topbar() {
                 key={to}
                 to={to}
                 aria-label={title}
-                className='pixel-button inline-flex items-center justify-start gap-3 min-w-[90px] px-3 py-2 h-9 text-sm font-semibold uppercase tracking-widest bg-background/75 text-foreground border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 hover:text-accent-foreground dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-accent/45 dark:hover:text-accent-foreground transition-all'
+                className={cn(
+                  'pixel-button items-center justify-center gap-2 px-2 py-2 h-9 text-sm font-semibold uppercase tracking-widest sm:justify-start sm:gap-3 sm:min-w-[90px] sm:px-3 bg-background/75 text-foreground border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 hover:text-accent-foreground dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-accent/45 dark:hover:text-accent-foreground transition-all',
+                  isAdmin && to === '/' ? 'hidden sm:inline-flex' : 'inline-flex'
+                )}
                 activeProps={{
                   className: 'bg-primary/20 text-primary border-[color:rgba(217,119,87,0.55)] dark:bg-primary/20 dark:border-[color:rgba(217,119,87,0.55)]'
                 }}
@@ -92,7 +97,7 @@ export function Topbar() {
           </nav>
         </div>
 
-        <div className='flex items-center gap-3'>
+        <div className='flex items-center gap-2 sm:gap-3 pl-2 sm:pl-0'>
           <ThemeSwitch />
           <UserMenu />
         </div>

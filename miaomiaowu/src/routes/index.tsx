@@ -142,7 +142,7 @@ function DashboardPage() {
       <Topbar />
       <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
 
-        <section className='mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+        <section className=' grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
           {isLoading
             ? Array.from({ length: 4 }).map((_, index) => (
                 <Card key={index}>
