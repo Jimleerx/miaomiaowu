@@ -45,6 +45,16 @@
     background-size: cover;
   }
 
+  :where(:not(input):not(textarea):not([contenteditable='true'])) {
+    caret-color: transparent;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'] {
+    caret-color: inherit;
+  }
+
   code,
   pre,
   kbd,
