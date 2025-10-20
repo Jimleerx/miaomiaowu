@@ -3,10 +3,10 @@ import { deepCopy } from './utils'
 import { DEFAULT_CLASH_CONFIG, CLASH_SITE_RULE_SET_BASE_URL, CLASH_IP_RULE_SET_BASE_URL } from './clash-config'
 import { RULE_CATEGORIES } from './predefined-rules'
 import { translateOutbound, CATEGORY_TO_RULE_NAME } from './translations'
-import { ProxyNode } from '../proxy-parser'
+// import { ProxyNode } from '../proxy-parser'
 
 export class ClashConfigBuilder {
-  private proxies: ProxyNode[] = []
+  private proxies: ProxyConfig[] = []
   private config: any
 
   constructor(
@@ -29,6 +29,7 @@ export class ClashConfigBuilder {
 
   private convertProxies(): void {
     this.config.proxies = this.proxyConfigs
+    this.proxies = this.proxyConfigs
   }
   private buildRuleProviders(): void {
     const ruleProviders: any = {}
@@ -86,7 +87,7 @@ export class ClashConfigBuilder {
     groups.push({
       name: translateOutbound('Auto Select'),
       type: 'url-test',
-      proxies: proxyNames,
+      proxies: [...proxyNames],
       url: 'https://www.gstatic.com/generate_204',
       interval: 300,
       lazy: false,

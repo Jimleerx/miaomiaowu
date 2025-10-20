@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, Download, Loader2, Save } from 'lucide-react'
+import { Copy, Download, Loader2, Save, Layers, GripVertical, X } from 'lucide-react'
 import { Topbar } from '@/components/layout/topbar'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
@@ -38,9 +38,10 @@ import { toast } from 'sonner'
 import { ClashConfigBuilder } from '@/lib/sublink/clash-builder'
 import { CustomRulesEditor } from '@/components/custom-rules-editor'
 import { RuleSelector } from '@/components/rule-selector'
-import type { PredefinedRuleSetType, CustomRule, KanbanObject } from '@/lib/sublink/types'
+import type { PredefinedRuleSetType, CustomRule } from '@/lib/sublink/types'
 import type { ProxyConfig } from '@/lib/sublink/types'
 import { CATEGORY_TO_RULE_NAME, translateOutbound } from '@/lib/sublink/translations'
+import yaml from 'js-yaml'
 
 type SavedNode = {
   id: number
@@ -82,6 +83,14 @@ function SubscriptionGeneratorPage() {
   const [subscribeFilename, setSubscribeFilename] = useState('')
   const [subscribeDescription, setSubscribeDescription] = useState('')
 
+  // 手动分组对话框状态
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
+  const [availableProxies, setAvailableProxies] = useState<string[]>([])
+  const [draggedItem, setDraggedItem] = useState<{ proxy: string; sourceGroup: string | null; sourceIndex: number } | null>(null)
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
+  const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // 获取已保存的节点
   const { data: nodesData } = useQuery({
     queryKey: ['nodes'],
@@ -121,12 +130,21 @@ function SubscriptionGeneratorPage() {
     }
   }
 
-  const handleGetProxyGroups = (): Array<KanbanObject> => {
+  type ProxyGroup = {
+    name: string
+    type: string
+    proxies: string[]
+    url?: string
+    interval?: number
+    lazy?: boolean
+  }
+
+  const handleGetProxyGroups = (): ProxyGroup[] => {
     if (selectedNodeIds.size === 0) {
       toast.error('请选择至少一个节点')
       return []
     }
-    const groups: any[] = []
+    const groups: ProxyGroup[] = []
 
     setLoading(true)
     try {
@@ -160,20 +178,21 @@ function SubscriptionGeneratorPage() {
       }
 
       // Build Clash config using new builder
-      const proxyNames = proxies.map((p) => p.name)
-
+      const proxyNames: string[] = proxies
+        .map((p) => p.name)
+        .filter((name): name is string => name !== undefined)
       // 1. Node Select group
       groups.push({
-        name: translateOutbound('Node Select'),
+        name: translateOutbound('Node Select') || 'Node Select',
         type: 'select',
-        proxies: ['DIRECT', 'REJECT', translateOutbound('Auto Select'), ...proxyNames],
+        proxies: ['DIRECT', 'REJECT', translateOutbound('Auto Select') || 'Auto Select', ...proxyNames],
       })
 
       // 2. Auto Select group
       groups.push({
-        name: translateOutbound('Auto Select'),
+        name: translateOutbound('Auto Select') || 'Auto Select',
         type: 'url-test',
-        proxies: proxyNames,
+        proxies: [...proxyNames],
         url: 'https://www.gstatic.com/generate_204',
         interval: 300,
         lazy: false,
@@ -185,13 +204,13 @@ function SubscriptionGeneratorPage() {
         if (!ruleName) continue
 
         groups.push({
-          name: translateOutbound(ruleName),
+          name: translateOutbound(ruleName) || ruleName,
           type: 'select',
           proxies: [
-            translateOutbound('Node Select'),
+            translateOutbound('Node Select') || 'Node Select',
             'DIRECT',
             'REJECT',
-            translateOutbound('Auto Select'),
+            translateOutbound('Auto Select') || 'Auto Select',
             ...proxyNames,
           ],
         })
@@ -202,13 +221,13 @@ function SubscriptionGeneratorPage() {
         if (!rule.name) continue
 
         groups.push({
-          name: translateOutbound(rule.name),
+          name: translateOutbound(rule.name) || rule.name,
           type: 'select',
           proxies: [
-            translateOutbound('Node Select'),
+            translateOutbound('Node Select') || 'Node Select',
             'DIRECT',
             'REJECT',
-            translateOutbound('Auto Select'),
+            translateOutbound('Auto Select') || 'Auto Select',
             ...proxyNames,
           ],
         })
@@ -216,13 +235,13 @@ function SubscriptionGeneratorPage() {
 
       // 5. Fall Back group
       groups.push({
-        name: translateOutbound('Fall Back'),
+        name: translateOutbound('Fall Back') || 'Fall Back',
         type: 'select',
         proxies: [
-          translateOutbound('Node Select'),
+          translateOutbound('Node Select') || 'Node Select',
           'DIRECT',
           'REJECT',
-          translateOutbound('Auto Select'),
+          translateOutbound('Auto Select') || 'Auto Select',
           ...proxyNames,
         ],
       })
@@ -364,6 +383,179 @@ function SubscriptionGeneratorPage() {
     })
   }
 
+  // 手动分组功能
+  const handleOpenGroupDialog = () => {
+    if (!clashConfig) {
+      toast.error('请先生成配置')
+      return
+    }
+
+    try {
+      // 解析当前的 Clash 配置
+      const parsedConfig = yaml.load(clashConfig) as any
+
+      if (!parsedConfig['proxy-groups']) {
+        toast.error('配置中没有找到代理组')
+        return
+      }
+
+      // 获取所有代理组，确保每个组都有 proxies 数组
+      const groups = (parsedConfig['proxy-groups'] as any[]).map(group => ({
+        ...group,
+        proxies: group.proxies || []
+      })) as ProxyGroup[]
+
+      // 获取所有可用的代理节点，添加默认的特殊节点
+      const allProxies = parsedConfig.proxies?.map((p: any) => p.name) || []
+      const specialNodes = ['⚡ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
+      const availableNodes = [...specialNodes, ...allProxies]
+
+      setProxyGroups(groups)
+      setAvailableProxies(availableNodes)
+      setGroupDialogOpen(true)
+    } catch (error) {
+      console.error('解析配置失败:', error)
+      toast.error('解析配置失败，请检查配置格式')
+    }
+  }
+
+  const handleApplyGrouping = () => {
+    try {
+      // 解析当前配置
+      const parsedConfig = yaml.load(clashConfig) as any
+
+      // 更新代理组，过滤掉 undefined 值
+      parsedConfig['proxy-groups'] = proxyGroups.map(group => ({
+        ...group,
+        proxies: group.proxies.filter((p): p is string => p !== undefined)
+      }))
+
+      // 转换回 YAML
+      const newConfig = yaml.dump(parsedConfig, {
+        lineWidth: -1,
+        noRefs: true,
+      })
+
+      setClashConfig(newConfig)
+      setGroupDialogOpen(false)
+      toast.success('分组已应用到配置')
+    } catch (error) {
+      console.error('应用分组失败:', error)
+      toast.error('应用分组失败，请检查配置')
+    }
+  }
+
+  // 拖拽处理函数
+  const handleDragStart = (proxy: string, sourceGroup: string | null, sourceIndex: number) => {
+    setDraggedItem({ proxy, sourceGroup, sourceIndex })
+  }
+
+  const handleDragEnd = () => {
+    setDraggedItem(null)
+    setDragOverGroup(null)
+  }
+
+  const handleDragEnterGroup = (groupName: string) => {
+    // 清除之前的定时器
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current)
+    }
+    // 立即设置高亮状态
+    setDragOverGroup(groupName)
+  }
+
+  const handleDragLeaveGroup = () => {
+    // 使用防抖延迟清除高亮，避免在节点交界处抖动
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current)
+    }
+    dragTimeoutRef.current = setTimeout(() => {
+      setDragOverGroup(null)
+    }, 50)
+  }
+
+  const handleDrop = (targetGroupName: string, targetIndex?: number) => {
+    if (!draggedItem) return
+
+    setProxyGroups(groups => {
+      const newGroups = groups.map(group => {
+        // 从源组中移除
+        if (group.name === draggedItem.sourceGroup) {
+          return {
+            ...group,
+            proxies: group.proxies.filter((_, idx) => idx !== draggedItem.sourceIndex)
+          }
+        }
+        return group
+      })
+
+      // 添加到目标组
+      return newGroups.map(group => {
+        if (group.name === targetGroupName) {
+          // 检查是否已存在
+          if (!group.proxies.includes(draggedItem.proxy)) {
+            const newProxies = [...group.proxies]
+            if (targetIndex !== undefined) {
+              // 插入到指定位置
+              newProxies.splice(targetIndex, 0, draggedItem.proxy)
+            } else {
+              // 添加到末尾
+              newProxies.push(draggedItem.proxy)
+            }
+            return {
+              ...group,
+              proxies: newProxies
+            }
+          }
+        }
+        return group
+      })
+    })
+
+    setDraggedItem(null)
+    setDragOverGroup(null)
+  }
+
+  const handleDropToAvailable = () => {
+    if (!draggedItem || !draggedItem.sourceGroup) return
+
+    // 从源组中移除
+    setProxyGroups(groups =>
+      groups.map(group => {
+        if (group.name === draggedItem.sourceGroup) {
+          return {
+            ...group,
+            proxies: group.proxies.filter((_, idx) => idx !== draggedItem.sourceIndex)
+          }
+        }
+        return group
+      })
+    )
+
+    setDraggedItem(null)
+    setDragOverGroup(null)
+  }
+
+  // 删除节点
+  const handleRemoveProxy = (groupName: string, proxyIndex: number) => {
+    setProxyGroups(groups =>
+      groups.map(group => {
+        if (group.name === groupName) {
+          return {
+            ...group,
+            proxies: group.proxies.filter((_, idx) => idx !== proxyIndex)
+          }
+        }
+        return group
+      })
+    )
+  }
+
+  // 删除整个代理组
+  const handleRemoveGroup = (groupName: string) => {
+    setProxyGroups(groups => groups.filter(group => group.name !== groupName))
+  }
+
   return (
     <div className='flex min-h-screen flex-col bg-background'>
       <Topbar />
@@ -494,6 +686,10 @@ function SubscriptionGeneratorPage() {
                       <Download className='mr-2 h-4 w-4' />
                       下载
                     </Button>
+                    <Button variant='outline' size='sm' onClick={handleOpenGroupDialog}>
+                      <Layers className='mr-2 h-4 w-4' />
+                      手动分组
+                    </Button>
                     <Button size='sm' onClick={handleOpenSaveDialog}>
                       <Save className='mr-2 h-4 w-4' />
                       保存为订阅
@@ -509,7 +705,11 @@ function SubscriptionGeneratorPage() {
                     className='min-h-[400px] resize-none border-0 bg-transparent font-mono text-xs'
                   />
                 </div>
-                <div className='mt-4 flex justify-end'>
+                <div className='mt-4 flex justify-end gap-2'>
+                  <Button variant='outline' onClick={handleOpenGroupDialog}>
+                    <Layers className='mr-2 h-4 w-4' />
+                    手动分组
+                  </Button>
                   <Button onClick={handleOpenSaveDialog}>
                     <Save className='mr-2 h-4 w-4' />
                     保存为订阅
@@ -581,6 +781,157 @@ function SubscriptionGeneratorPage() {
             <Button onClick={handleSaveSubscribe} disabled={saveSubscribeMutation.isPending}>
               {saveSubscribeMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
               保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 手动分组对话框 */}
+      <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+        <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto' style={{ maxWidth: '95vw', width: '95vw' }}>
+          <DialogHeader>
+            <DialogTitle>手动分组节点</DialogTitle>
+            <DialogDescription>
+              拖拽节点到不同的代理组，自定义每个组的节点列表
+            </DialogDescription>
+          </DialogHeader>
+          <div className='py-4'>
+            <div className='flex gap-4'>
+              {/* 左侧：代理组（自适应宽度） */}
+              <div className='flex-1 grid gap-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                {proxyGroups.map((group) => (
+                  <Card
+                    key={group.name}
+                    className={`flex flex-col transition-all duration-75 ${
+                      dragOverGroup === group.name
+                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
+                        : ''
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      handleDragEnterGroup(group.name)
+                    }}
+                    onDragLeave={handleDragLeaveGroup}
+                    onDrop={() => handleDrop(group.name)}
+                  >
+                    <CardHeader className='pb-3'>
+                      <div className='flex items-start justify-between gap-2'>
+                        <div className='flex-1 min-w-0'>
+                          <CardTitle className='text-base truncate'>{group.name}</CardTitle>
+                          <CardDescription className='text-xs'>
+                            {group.type} ({(group.proxies || []).length} 个节点)
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          className='h-6 w-6 p-0 flex-shrink-0'
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRemoveGroup(group.name)
+                          }}
+                        >
+                          <X className='h-4 w-4 text-muted-foreground hover:text-destructive' />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className='flex-1 space-y-1 min-h-[200px]'>
+                      {(group.proxies || []).map((proxy, idx) => (
+                        proxy && (
+                          <div
+                            key={`${group.name}-${proxy}-${idx}`}
+                            draggable
+                            onDragStart={() => handleDragStart(proxy, group.name, idx)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDragEnterGroup(group.name)
+                            }}
+                            onDrop={(e) => {
+                              e.stopPropagation()
+                              handleDrop(group.name, idx)
+                            }}
+                            className='flex items-center gap-2 p-2 rounded border bg-background hover:bg-accent cursor-move transition-all duration-75 group/item'
+                          >
+                            <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                            <span className='text-sm truncate flex-1'>{proxy}</span>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-6 w-6 p-0'
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveProxy(group.name, idx)
+                              }}
+                            >
+                              <X className='h-4 w-4 text-muted-foreground hover:text-destructive' />
+                            </Button>
+                          </div>
+                        )
+                      ))}
+                      {(group.proxies || []).filter(p => p).length === 0 && (
+                        <div className={`text-sm text-center py-8 transition-colors ${
+                          dragOverGroup === group.name
+                            ? 'text-primary font-medium'
+                            : 'text-muted-foreground'
+                        }`}>
+                          将节点拖拽到这里
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* 分割线 */}
+              <div className='w-px bg-border flex-shrink-0'></div>
+
+              {/* 右侧：可用节点 */}
+              <div className='w-64 flex-shrink-0'>
+                <Card
+                  className={`sticky top-4 transition-all duration-75 ${
+                    dragOverGroup === 'available'
+                      ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
+                      : ''
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    handleDragEnterGroup('available')
+                  }}
+                  onDragLeave={handleDragLeaveGroup}
+                  onDrop={handleDropToAvailable}
+                >
+                  <CardHeader className='pb-3'>
+                    <CardTitle className='text-base'>可用节点</CardTitle>
+                    <CardDescription className='text-xs'>
+                      {availableProxies.length} 个节点
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className='space-y-1 max-h-[500px] overflow-y-auto'>
+                    {availableProxies.map((proxy, idx) => (
+                      <div
+                        key={`available-${proxy}-${idx}`}
+                        draggable
+                        onDragStart={() => handleDragStart(proxy, null, idx)}
+                        onDragEnd={handleDragEnd}
+                        className='flex items-center gap-2 p-2 rounded border bg-background hover:bg-accent cursor-move transition-all duration-75'
+                      >
+                        <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                        <span className='text-sm truncate flex-1'>{proxy}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setGroupDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleApplyGrouping}>
+              应用分组
             </Button>
           </DialogFooter>
         </DialogContent>
