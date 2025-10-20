@@ -34,6 +34,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 import { ClashConfigBuilder } from '@/lib/sublink/clash-builder'
 import { CustomRulesEditor } from '@/components/custom-rules-editor'
@@ -77,6 +84,11 @@ function SubscriptionGeneratorPage() {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<number>>(new Set())
   const [protocolFilter, setProtocolFilter] = useState<string>('all')
 
+  // 规则模式状态
+  const [ruleMode, setRuleMode] = useState<'custom' | 'template'>('custom')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [hasManuallyGrouped, setHasManuallyGrouped] = useState(false)
+
   // 保存订阅对话框状态
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [subscribeName, setSubscribeName] = useState('')
@@ -101,8 +113,19 @@ function SubscriptionGeneratorPage() {
     enabled: Boolean(auth.accessToken),
   })
 
+  // 获取规则模板列表
+  const { data: templatesData } = useQuery({
+    queryKey: ['rule-templates'],
+    queryFn: async () => {
+      const response = await api.get('/api/rule-templates')
+      return response.data as { templates: string[] }
+    },
+    enabled: Boolean(auth.accessToken),
+  })
+
   const savedNodes = nodesData?.nodes ?? []
   const enabledNodes = savedNodes.filter(n => n.enabled)
+  const templates = templatesData?.templates ?? []
 
   // 获取所有协议类型
   const protocols = Array.from(new Set(enabledNodes.map(n => n.protocol.toLowerCase()))).sort()
@@ -257,6 +280,63 @@ function SubscriptionGeneratorPage() {
   }
 
 
+  // 加载模板并插入节点
+  const handleLoadTemplate = async () => {
+    if (selectedNodeIds.size === 0) {
+      toast.error('请选择至少一个节点')
+      return
+    }
+
+    if (!selectedTemplate) {
+      toast.error('请选择一个模板')
+      return
+    }
+
+    setLoading(true)
+    try {
+      // 获取选中的节点并转换为ProxyConfig
+      const selectedNodes = savedNodes.filter(n => selectedNodeIds.has(n.id))
+      const proxies: ProxyConfig[] = selectedNodes.map(node => {
+        try {
+          return JSON.parse(node.clash_config) as ProxyConfig
+        } catch (e) {
+          console.error('Failed to parse clash config for node:', node.node_name, e)
+          return null
+        }
+      }).filter((p): p is ProxyConfig => p !== null)
+
+      if (proxies.length === 0) {
+        toast.error('未能解析到任何有效节点')
+        return
+      }
+
+      // 读取模板文件
+      const response = await api.get(`/api/rule-templates/${selectedTemplate}`)
+      const templateContent = response.data.content as string
+
+      // 解析模板
+      const templateConfig = yaml.load(templateContent) as any
+
+      // 插入代理节点
+      templateConfig.proxies = proxies
+
+      // 转换回 YAML
+      const finalConfig = yaml.dump(templateConfig, {
+        lineWidth: -1,
+        noRefs: true,
+      })
+
+      setClashConfig(finalConfig)
+      setHasManuallyGrouped(false) // 加载模板后重置手动分组状态
+      toast.success(`成功加载模板并插入 ${proxies.length} 个节点`)
+    } catch (error) {
+      console.error('Load template error:', error)
+      toast.error('加载模板失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleGenerate = async () => {
     if (selectedNodeIds.size === 0) {
       toast.error('请选择至少一个节点')
@@ -303,6 +383,7 @@ function SubscriptionGeneratorPage() {
       const generatedConfig = clashBuilder.build()
 
       setClashConfig(generatedConfig)
+      setHasManuallyGrouped(true) // 自定义规则模式生成后自动标记为已分组
 
       toast.success('Clash 配置生成成功！')
     } catch (error) {
@@ -364,6 +445,11 @@ function SubscriptionGeneratorPage() {
   const handleOpenSaveDialog = () => {
     if (!clashConfig) {
       toast.error('请先生成配置')
+      return
+    }
+    // 使用模板模式时，必须先手动分组
+    if (ruleMode === 'template' && !hasManuallyGrouped) {
+      toast.error('请先手动分组节点')
       return
     }
     setSaveDialogOpen(true)
@@ -438,6 +524,7 @@ function SubscriptionGeneratorPage() {
 
       setClashConfig(newConfig)
       setGroupDialogOpen(false)
+      setHasManuallyGrouped(true) // 标记已手动分组
       toast.success('分组已应用到配置')
     } catch (error) {
       console.error('应用分组失败:', error)
@@ -553,7 +640,16 @@ function SubscriptionGeneratorPage() {
 
   // 删除整个代理组
   const handleRemoveGroup = (groupName: string) => {
-    setProxyGroups(groups => groups.filter(group => group.name !== groupName))
+    setProxyGroups(groups => {
+      // 先过滤掉要删除的组
+      const filteredGroups = groups.filter(group => group.name !== groupName)
+
+      // 从所有剩余组的 proxies 列表中移除对被删除组的引用
+      return filteredGroups.map(group => ({
+        ...group,
+        proxies: group.proxies.filter(proxy => proxy !== groupName)
+      }))
+    })
   }
 
   return (
@@ -646,22 +742,104 @@ function SubscriptionGeneratorPage() {
                 </>
               )}
 
-              <RuleSelector
-                ruleSet={ruleSet}
-                onRuleSetChange={setRuleSet}
-                selectedCategories={selectedCategories}
-                onCategoriesChange={setSelectedCategories}
-              />
-
-              <div className='flex gap-2'>
-                <Button onClick={handleGenerate} disabled={loading || selectedNodeIds.size === 0} className='flex-1'>
-                  {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-                  {loading ? '生成中...' : '生成订阅文件'}
-                </Button>
-                <Button variant='outline' onClick={handleClear}>
-                  清空
-                </Button>
+              {/* 规则模式选择 */}
+              <div className='space-y-4'>
+                <Label>规则模式</Label>
+                <div className='flex gap-2'>
+                  <Button
+                    variant={ruleMode === 'custom' ? 'default' : 'outline'}
+                    onClick={() => setRuleMode('custom')}
+                    className='flex-1'
+                  >
+                    自定义规则
+                  </Button>
+                  <Button
+                    variant={ruleMode === 'template' ? 'default' : 'outline'}
+                    onClick={() => setRuleMode('template')}
+                    className='flex-1'
+                  >
+                    使用模板
+                  </Button>
+                </div>
               </div>
+
+              {/* 自定义规则模式 */}
+              {ruleMode === 'custom' && (
+                <RuleSelector
+                  ruleSet={ruleSet}
+                  onRuleSetChange={setRuleSet}
+                  selectedCategories={selectedCategories}
+                  onCategoriesChange={setSelectedCategories}
+                />
+              )}
+
+              {/* 模板模式 */}
+              {ruleMode === 'template' && (
+                <div className='space-y-4'>
+                  <div className='space-y-2'>
+                    <Label htmlFor='template-select'>选择模板</Label>
+                    <p className='text-sm text-muted-foreground'>
+                      模板为静态文件模板(源代码rule_templates目录中)，不会提交节点到转换后端，放心使用。
+                    </p>
+                  </div>
+                  <div className='flex gap-2'>
+                    <div className='flex-1'>
+                      <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                        <SelectTrigger id='template-select'>
+                          <SelectValue placeholder='请选择模板' />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((template) => (
+                            <SelectItem key={template} value={template}>
+                              {template}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className='flex items-end'>
+                      <div
+                        onClick={() => {
+                          if (selectedNodeIds.size === 0) {
+                            toast.error('请先选择节点')
+                          } else if (!selectedTemplate) {
+                            toast.error('请先选择模板')
+                          }
+                        }}
+                      >
+                        <Button
+                          onClick={handleLoadTemplate}
+                          disabled={loading || selectedNodeIds.size === 0 || !selectedTemplate}
+                        >
+                          {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                          加载
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {ruleMode === 'custom' && (
+                <div className='flex gap-2'>
+                  <div
+                    className='flex-1'
+                    onClick={() => {
+                      if (selectedNodeIds.size === 0) {
+                        toast.error('请先选择节点')
+                      }
+                    }}
+                  >
+                    <Button onClick={handleGenerate} disabled={loading || selectedNodeIds.size === 0} className='w-full'>
+                      {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                      {loading ? '生成中...' : '生成订阅文件'}
+                    </Button>
+                  </div>
+                  <Button variant='outline' onClick={handleClear}>
+                    清空
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -670,14 +848,14 @@ function SubscriptionGeneratorPage() {
           {clashConfig && (
             <Card>
               <CardHeader>
-                <div className='flex items-center justify-between'>
+                <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
                   <div>
                     <CardTitle>生成的 Clash 配置</CardTitle>
                     <CardDescription>
                       预览生成的 YAML 配置文件，可复制或下载
                     </CardDescription>
                   </div>
-                  <div className='flex gap-2'>
+                  <div className='flex flex-wrap gap-2'>
                     <Button variant='outline' size='sm' onClick={copyToClipboard}>
                       <Copy className='mr-2 h-4 w-4' />
                       复制
@@ -923,17 +1101,19 @@ function SubscriptionGeneratorPage() {
                     ))}
                   </CardContent>
                 </Card>
+
+                {/* 操作按钮 */}
+                <div className='flex gap-2 mt-4'>
+                  <Button variant='outline' onClick={() => setGroupDialogOpen(false)} className='flex-1'>
+                    取消
+                  </Button>
+                  <Button onClick={handleApplyGrouping} className='flex-1'>
+                    应用分组
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setGroupDialogOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={handleApplyGrouping}>
-              应用分组
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

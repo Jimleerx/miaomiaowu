@@ -1,11 +1,19 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Link as LinkIcon, Radar, Users, Database, Zap, Network } from 'lucide-react'
+import { Activity, Link as LinkIcon, Radar, Users, Database, Zap, Network, Menu } from 'lucide-react'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { UserMenu } from './user-menu'
 import { useAuthStore } from '@/stores/auth-store'
 import { profileQueryFn } from '@/lib/profile'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { useState } from 'react'
 
 const baseNavLinks = [
   {
@@ -18,6 +26,9 @@ const baseNavLinks = [
     to: '/subscription',
     icon: LinkIcon,
   },
+]
+
+const adminNavLinks = [
   {
     title: '生成订阅',
     to: '/generator',
@@ -28,9 +39,6 @@ const baseNavLinks = [
     to: '/nodes',
     icon: Network,
   },
-]
-
-const adminNavLinks = [
   {
     title: '探针管理',
     to: '/probe',
@@ -55,6 +63,7 @@ const adminNavLinks = [
 
 export function Topbar() {
   const { auth } = useAuthStore()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: profileQueryFn,
@@ -81,7 +90,8 @@ export function Topbar() {
             <span className='hidden sm:inline pixel-text text-primary text-base'>妙妙屋</span>
           </Link>
 
-          <nav className='flex items-center gap-2 sm:gap-3'>
+          {/* Desktop Navigation */}
+          <nav className='hidden md:flex items-center gap-2 sm:gap-3'>
             {navLinks.map(({ title, to, icon: Icon }) => (
               <Link
                 key={to}
@@ -100,6 +110,53 @@ export function Topbar() {
               </Link>
             ))}
           </nav>
+
+          {/* Mobile Base Navigation - Always show these */}
+          <nav className='md:hidden flex items-center gap-2'>
+            {baseNavLinks.map(({ title, to, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                aria-label={title}
+                className='pixel-button inline-flex items-center justify-center gap-2 px-2 py-2 h-9 text-sm font-semibold uppercase tracking-widest bg-background/75 text-foreground border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 hover:text-accent-foreground dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-accent/45 dark:hover:text-accent-foreground transition-all'
+                activeProps={{
+                  className: 'bg-primary/20 text-primary border-[color:rgba(217,119,87,0.55)] dark:bg-primary/20 dark:border-[color:rgba(217,119,87,0.55)]'
+                }}
+              >
+                <Icon className='size-[18px] shrink-0' />
+              </Link>
+            ))}
+          </nav>
+
+          {/* Mobile Navigation Dropdown - Only show for admin */}
+          {isAdmin && (
+            <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant='outline'
+                  size='icon'
+                  className='md:hidden pixel-button h-9 w-9 bg-background/75 border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-accent/45'
+                >
+                  <Menu className='h-5 w-5' />
+                  <span className='sr-only'>打开菜单</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='start' className='w-48 pixel-border'>
+                {adminNavLinks.map(({ title, to, icon: Icon }) => (
+                  <DropdownMenuItem key={to} asChild>
+                    <Link
+                      to={to}
+                      className='flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-accent/35 focus:bg-accent/35'
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Icon className='size-[18px] shrink-0' />
+                      <span>{title}</span>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <div className='flex items-center gap-2 sm:gap-3 pl-2 sm:pl-0'>

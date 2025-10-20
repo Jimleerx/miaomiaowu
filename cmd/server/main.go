@@ -92,9 +92,11 @@ func main() {
 	mux.Handle("/api/traffic/summary", auth.RequireToken(tokenStore, trafficHandler))
 	mux.Handle("/api/subscriptions", auth.RequireToken(tokenStore, handler.NewSubscriptionListHandler(repo)))
 	mux.Handle("/api/rules/latest", auth.RequireToken(tokenStore, handler.NewRuleMetadataHandler(subscribeDir, repo)))
-	mux.Handle("/api/nodes", auth.RequireToken(tokenStore, handler.NewNodesHandler(repo)))
-	mux.Handle("/api/nodes/", auth.RequireToken(tokenStore, handler.NewNodesHandler(repo)))
+	mux.Handle("/api/nodes", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo)))
+	mux.Handle("/api/nodes/", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo)))
 	mux.Handle("/api/subscribe-files", auth.RequireToken(tokenStore, handler.NewSubscribeFilesListHandler(repo)))
+	mux.Handle("/api/rule-templates", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleTemplatesHandler()))
+	mux.Handle("/api/rule-templates/", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleTemplatesHandler()))
 	mux.Handle("/api/clash/subscribe", handler.NewSubscriptionEndpoint(tokenStore, repo, subscribeDir))
 	mux.Handle("/", web.Handler())
 

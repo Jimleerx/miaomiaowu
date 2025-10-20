@@ -73,7 +73,7 @@ export function RuleSelector({
               <HelpCircle className='h-4 w-4 text-muted-foreground' />
             </TooltipTrigger>
             <TooltipContent className='max-w-xs'>
-              <p>选择预定义规则集或自定义规则类别组合</p>
+              <p>这个功能是从https://github.com/7Sageer/sublink-worker复制粘贴过来的</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
