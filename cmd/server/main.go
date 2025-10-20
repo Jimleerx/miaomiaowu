@@ -18,7 +18,7 @@ import (
 	"traffic-info/subscribes"
 )
 
-const version = "0.0.2"
+const version = "0.0.6"
 
 func main() {
 	addr := getAddr()
@@ -248,6 +248,11 @@ func syncSubscribeFilesToDatabase(repo *storage.TrafficRepository, subscribeDir 
 			continue
 		}
 
+		// Skip the .keep.yaml placeholder file
+		if filename == ".keep.yaml" {
+			continue
+		}
+
 		// Check if this file already has a database record
 		if _, err := repo.GetSubscribeFileByFilename(ctx, filename); err == nil {
 			// File already exists in database, skip
@@ -264,7 +269,7 @@ func syncSubscribeFilesToDatabase(repo *storage.TrafficRepository, subscribeDir 
 		file := storage.SubscribeFile{
 			Name:        name,
 			Description: "自动同步的订阅文件",
-			URL:         "",                         // No URL for legacy files
+			URL:         "",                          // No URL for legacy files
 			Type:        storage.SubscribeTypeUpload, // Mark as upload type
 			Filename:    filename,
 		}

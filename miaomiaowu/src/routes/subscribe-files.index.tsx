@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createFileRoute, redirect, Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { load as parseYAML } from 'js-yaml'
@@ -36,6 +36,7 @@ type SubscribeFile = {
   filename: string
   created_at: string
   updated_at: string
+  latest_version?: number
 }
 
 const TYPE_COLORS = {
@@ -53,6 +54,17 @@ const TYPE_LABELS = {
 function SubscribeFilesPage() {
   const { auth } = useAuthStore()
   const queryClient = useQueryClient()
+
+  // 日期格式化器
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('zh-CN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        hour12: false,
+      }),
+    []
+  )
 
   // 对话框状态
   const [importDialogOpen, setImportDialogOpen] = useState(false)
@@ -188,6 +200,10 @@ function SubscribeFilesPage() {
       setIsDirty(false)
       setValidationError(null)
       queryClient.invalidateQueries({ queryKey: ['rule-file', editingFile?.filename] })
+      // 关闭编辑对话框
+      setEditDialogOpen(false)
+      setEditingFile(null)
+      setEditorValue('')
     },
     onError: (error) => {
       handleServerError(error)
@@ -447,6 +463,8 @@ function SubscribeFilesPage() {
                       <TableHead>说明</TableHead>
                       <TableHead>类型</TableHead>
                       <TableHead>文件名</TableHead>
+                      <TableHead>最后更新</TableHead>
+                      <TableHead className='text-center'>版本</TableHead>
                       <TableHead className='text-center'>操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -465,6 +483,16 @@ function SubscribeFilesPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className='font-mono text-sm'>{file.filename}</TableCell>
+                        <TableCell className='text-sm text-muted-foreground'>
+                          {file.updated_at ? dateFormatter.format(new Date(file.updated_at)) : '-'}
+                        </TableCell>
+                        <TableCell className='text-center'>
+                          {file.latest_version ? (
+                            <Badge variant='secondary'>v{file.latest_version}</Badge>
+                          ) : (
+                            <span className='text-sm text-muted-foreground'>-</span>
+                          )}
+                        </TableCell>
                         <TableCell className='text-center'>
                           <div className='flex items-center justify-center gap-2'>
                             <Button

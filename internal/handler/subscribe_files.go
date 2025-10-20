@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,7 +64,7 @@ func (h *subscribeFilesHandler) handleList(w http.ResponseWriter, r *http.Reques
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{
-		"files": convertSubscribeFiles(files),
+		"files": h.convertSubscribeFilesWithVersions(r.Context(), files),
 	})
 }
 
@@ -449,13 +450,14 @@ type subscribeFileRequest struct {
 }
 
 type subscribeFileDTO struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Type        string    `json:"type"`
-	Filename    string    `json:"filename"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID            int64     `json:"id"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	Type          string    `json:"type"`
+	Filename      string    `json:"filename"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	LatestVersion int64     `json:"latest_version,omitempty"`
 }
 
 func convertSubscribeFile(file storage.SubscribeFile) subscribeFileDTO {
@@ -474,6 +476,21 @@ func convertSubscribeFiles(files []storage.SubscribeFile) []subscribeFileDTO {
 	result := make([]subscribeFileDTO, 0, len(files))
 	for _, file := range files {
 		result = append(result, convertSubscribeFile(file))
+	}
+	return result
+}
+
+func (h *subscribeFilesHandler) convertSubscribeFilesWithVersions(ctx context.Context, files []storage.SubscribeFile) []subscribeFileDTO {
+	result := make([]subscribeFileDTO, 0, len(files))
+	for _, file := range files {
+		dto := convertSubscribeFile(file)
+
+		// 获取最新版本号
+		if versions, err := h.repo.ListRuleVersions(ctx, file.Filename, 1); err == nil && len(versions) > 0 {
+			dto.LatestVersion = versions[0].Version
+		}
+
+		result = append(result, dto)
 	}
 	return result
 }
