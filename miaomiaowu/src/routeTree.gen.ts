@@ -16,6 +16,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as ProbeRouteImport } from './routes/probe'
 import { Route as NodesRouteImport } from './routes/nodes'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SubscriptionIndexRouteImport } from './routes/subscription.index'
@@ -59,6 +60,11 @@ const NodesRoute = NodesRouteImport.update({
   path: '/nodes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
@@ -98,6 +104,7 @@ const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/login': typeof LoginRoute
   '/nodes': typeof NodesRouteWithChildren
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/login': typeof LoginRoute
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/login': typeof LoginRoute
   '/nodes': typeof NodesRouteWithChildren
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
@@ -146,6 +155,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/change-password'
+    | '/login'
     | '/nodes'
     | '/probe'
     | '/rules'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/change-password'
+    | '/login'
     | '/probe'
     | '/rules'
     | '/settings'
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/change-password'
+    | '/login'
     | '/nodes'
     | '/probe'
     | '/rules'
@@ -192,6 +204,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  LoginRoute: typeof LoginRoute
   NodesRoute: typeof NodesRouteWithChildren
   ProbeRoute: typeof ProbeRoute
   RulesRoute: typeof RulesRoute
@@ -250,6 +263,13 @@ declare module '@tanstack/react-router' {
       path: '/nodes'
       fullPath: '/nodes'
       preLoaderRoute: typeof NodesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/change-password': {
@@ -345,6 +365,7 @@ const SubscriptionRouteWithChildren = SubscriptionRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  LoginRoute: LoginRoute,
   NodesRoute: NodesRouteWithChildren,
   ProbeRoute: ProbeRoute,
   RulesRoute: RulesRoute,

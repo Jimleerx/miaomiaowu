@@ -22,7 +22,7 @@ export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
     const token = useAuthStore.getState().auth.accessToken
     if (!token) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/' })
     }
   },
   component: SubscribeFilesPage,
