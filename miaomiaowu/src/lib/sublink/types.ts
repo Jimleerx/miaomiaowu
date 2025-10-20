@@ -1,7 +1,7 @@
 // Type definitions for sublink-worker
 
 export interface ProxyConfig {
-  tag: string
+  tag?: string
   server_port: number
   alter_id?: number
   security?: string
@@ -9,14 +9,14 @@ export interface ProxyConfig {
   tcp_fast_open?: boolean
   tls?: boolean
   transport?: TransportConfig
-  name: string
+  name?: string
   type: string
   server: string
-  port: number
+  port?: number
   password?: string
   uuid?: string
   method?: string
-  flow: string
+  flow?: string
   cipher?: string
   [key: string]: unknown
 }

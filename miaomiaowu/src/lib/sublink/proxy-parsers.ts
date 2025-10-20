@@ -9,7 +9,7 @@ import {
 } from './utils'
 
 export class ProxyParser {
-  static parse(url: string, userAgent?: string): ProxyConfig | null {
+  static parse(url: string): ProxyConfig | null {
     url = url.trim()
     const type = url.split('://')[0]
 
@@ -224,7 +224,7 @@ class Hysteria2Parser {
       const password = urlObj.username
       const server = urlObj.hostname
       const port = parseInt(urlObj.port)
-      const params = parseUrlParams(url)
+      // const params = parseUrlParams(url)
       const tag = decodeURIComponent(urlObj.hash.slice(1)) || 'Hysteria2'
 
       return {
@@ -233,11 +233,7 @@ class Hysteria2Parser {
         server,
         server_port: port,
         password,
-        tls: {
-          enabled: true,
-          server_name: params.sni || server,
-          insecure: params.insecure === '1',
-        },
+        tls: true,
       }
     } catch (e) {
       console.error('Failed to parse hysteria2 URL:', e)
@@ -279,7 +275,7 @@ class TuicParser {
       const [uuid, password] = urlObj.username.split(':')
       const server = urlObj.hostname
       const port = parseInt(urlObj.port)
-      const params = parseUrlParams(url)
+      // const params = parseUrlParams(url)
       const tag = decodeURIComponent(urlObj.hash.slice(1)) || 'TUIC'
 
       return {
@@ -289,11 +285,7 @@ class TuicParser {
         server_port: port,
         uuid,
         password,
-        tls: {
-          enabled: true,
-          server_name: params.sni || server,
-          insecure: params.insecure === '1',
-        },
+        tls: true,
       }
     } catch (e) {
       console.error('Failed to parse tuic URL:', e)

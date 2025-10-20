@@ -128,8 +128,8 @@ func (r *TrafficRepository) CreateSubscribeFile(ctx context.Context, file Subscr
 	if file.Type != SubscribeTypeCreate && file.Type != SubscribeTypeImport && file.Type != SubscribeTypeUpload {
 		return SubscribeFile{}, errors.New("invalid subscribe file type")
 	}
-	// URL只对import和create类型必填，upload类型可以为空
-	if (file.Type == SubscribeTypeImport || file.Type == SubscribeTypeCreate) && file.URL == "" {
+	// URL只对import类型必填，upload类型可以为空
+	if (file.Type == SubscribeTypeImport) && file.URL == "" {
 		return SubscribeFile{}, errors.New("subscribe file url is required")
 	}
 	if file.Filename == "" {
@@ -175,8 +175,8 @@ func (r *TrafficRepository) UpdateSubscribeFile(ctx context.Context, file Subscr
 	if file.Type != SubscribeTypeCreate && file.Type != SubscribeTypeImport && file.Type != SubscribeTypeUpload {
 		return SubscribeFile{}, errors.New("invalid subscribe file type")
 	}
-	// URL只对import和create类型必填，upload类型可以为空
-	if (file.Type == SubscribeTypeImport || file.Type == SubscribeTypeCreate) && file.URL == "" {
+	// URL只对import类型必填，upload类型可以为空
+	if (file.Type == SubscribeTypeImport) && file.URL == "" {
 		return SubscribeFile{}, errors.New("subscribe file url is required")
 	}
 	if file.Filename == "" {

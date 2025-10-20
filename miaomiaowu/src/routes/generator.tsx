@@ -1,13 +1,23 @@
 import { useState } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { Copy, Download, Loader2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Copy, Download, Loader2, Save } from 'lucide-react'
 import { Topbar } from '@/components/layout/topbar'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Card,
   CardContent,
@@ -25,7 +35,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ClashConfigBuilderNew } from '@/lib/sublink/clash-builder-new'
+import { ClashConfigBuilder } from '@/lib/sublink/clash-builder'
 import { CustomRulesEditor } from '@/components/custom-rules-editor'
 import { RuleSelector } from '@/components/rule-selector'
 import type { PredefinedRuleSetType, CustomRule } from '@/lib/sublink/types'
@@ -56,12 +66,20 @@ export const Route = createFileRoute('/generator')({
 
 function SubscriptionGeneratorPage() {
   const { auth } = useAuthStore()
+  const queryClient = useQueryClient()
   const [ruleSet, setRuleSet] = useState<PredefinedRuleSetType>('balanced')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [customRules, setCustomRules] = useState<CustomRule[]>([])
   const [loading, setLoading] = useState(false)
   const [clashConfig, setClashConfig] = useState('')
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<number>>(new Set())
+  const [protocolFilter, setProtocolFilter] = useState<string>('all')
+
+  // 保存订阅对话框状态
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [subscribeName, setSubscribeName] = useState('')
+  const [subscribeFilename, setSubscribeFilename] = useState('')
+  const [subscribeDescription, setSubscribeDescription] = useState('')
 
   // 获取已保存的节点
   const { data: nodesData } = useQuery({
@@ -76,6 +94,14 @@ function SubscriptionGeneratorPage() {
   const savedNodes = nodesData?.nodes ?? []
   const enabledNodes = savedNodes.filter(n => n.enabled)
 
+  // 获取所有协议类型
+  const protocols = Array.from(new Set(enabledNodes.map(n => n.protocol.toLowerCase()))).sort()
+
+  // 根据协议筛选节点
+  const filteredNodes = protocolFilter === 'all'
+    ? enabledNodes
+    : enabledNodes.filter(n => n.protocol.toLowerCase() === protocolFilter)
+
   const handleToggleNode = (nodeId: number) => {
     const newSet = new Set(selectedNodeIds)
     if (newSet.has(nodeId)) {
@@ -87,10 +113,10 @@ function SubscriptionGeneratorPage() {
   }
 
   const handleToggleAll = () => {
-    if (selectedNodeIds.size === enabledNodes.length) {
+    if (selectedNodeIds.size === filteredNodes.length) {
       setSelectedNodeIds(new Set())
     } else {
-      setSelectedNodeIds(new Set(enabledNodes.map(n => n.id)))
+      setSelectedNodeIds(new Set(filteredNodes.map(n => n.id)))
     }
   }
 
@@ -132,7 +158,7 @@ function SubscriptionGeneratorPage() {
       }
 
       // Build Clash config using new builder
-      const clashBuilder = new ClashConfigBuilderNew(
+      const clashBuilder = new ClashConfigBuilder(
         proxies,
         selectedCategories,
         validCustomRules
@@ -176,6 +202,50 @@ function SubscriptionGeneratorPage() {
     toast.info('已清空所有内容')
   }
 
+  // 保存订阅 mutation
+  const saveSubscribeMutation = useMutation({
+    mutationFn: async (data: { name: string; filename: string; description: string; content: string }) => {
+      const response = await api.post('/api/admin/subscribe-files/create-from-config', data)
+      return response.data
+    },
+    onSuccess: () => {
+      toast.success('订阅保存成功！')
+      toast.info('请前往"订阅文件"页面查看')
+      setSaveDialogOpen(false)
+      setSubscribeName('')
+      setSubscribeFilename('')
+      setSubscribeDescription('')
+      queryClient.invalidateQueries({ queryKey: ['subscribe-files'] })
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] })
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || '保存订阅失败'
+      toast.error(message)
+    },
+  })
+
+  const handleOpenSaveDialog = () => {
+    if (!clashConfig) {
+      toast.error('请先生成配置')
+      return
+    }
+    setSaveDialogOpen(true)
+  }
+
+  const handleSaveSubscribe = () => {
+    if (!subscribeName.trim()) {
+      toast.error('请输入订阅名称')
+      return
+    }
+
+    saveSubscribeMutation.mutate({
+      name: subscribeName.trim(),
+      filename: subscribeFilename.trim(),
+      description: subscribeDescription.trim(),
+      content: clashConfig,
+    })
+  }
+
   return (
     <div className='flex min-h-screen flex-col bg-background'>
       <Topbar />
@@ -202,13 +272,38 @@ function SubscriptionGeneratorPage() {
                   暂无可用节点，请先在节点管理中添加节点
                 </div>
               ) : (
-                <div className='rounded-md border'>
+                <>
+                  {/* 协议筛选按钮 */}
+                  <div className='flex flex-wrap gap-2'>
+                    <Button
+                      variant={protocolFilter === 'all' ? 'default' : 'outline'}
+                      size='sm'
+                      onClick={() => setProtocolFilter('all')}
+                    >
+                      全部 ({enabledNodes.length})
+                    </Button>
+                    {protocols.map((protocol) => {
+                      const count = enabledNodes.filter(n => n.protocol.toLowerCase() === protocol).length
+                      return (
+                        <Button
+                          key={protocol}
+                          variant={protocolFilter === protocol ? 'default' : 'outline'}
+                          size='sm'
+                          onClick={() => setProtocolFilter(protocol)}
+                        >
+                          {protocol.toUpperCase()} ({count})
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  <div className='rounded-md border'>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className='w-[50px]'>
                           <Checkbox
-                            checked={selectedNodeIds.size === enabledNodes.length && enabledNodes.length > 0}
+                            checked={filteredNodes.length > 0 && filteredNodes.every(n => selectedNodeIds.has(n.id))}
                             onCheckedChange={handleToggleAll}
                           />
                         </TableHead>
@@ -218,7 +313,7 @@ function SubscriptionGeneratorPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {enabledNodes.map((node) => (
+                      {filteredNodes.map((node) => (
                         <TableRow key={node.id}>
                           <TableCell>
                             <Checkbox
@@ -237,7 +332,8 @@ function SubscriptionGeneratorPage() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                  </div>
+                </>
               )}
 
               <RuleSelector
@@ -280,6 +376,10 @@ function SubscriptionGeneratorPage() {
                       <Download className='mr-2 h-4 w-4' />
                       下载
                     </Button>
+                    <Button size='sm' onClick={handleOpenSaveDialog}>
+                      <Save className='mr-2 h-4 w-4' />
+                      保存为订阅
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -290,6 +390,12 @@ function SubscriptionGeneratorPage() {
                     readOnly
                     className='min-h-[400px] resize-none border-0 bg-transparent font-mono text-xs'
                   />
+                </div>
+                <div className='mt-4 flex justify-end'>
+                  <Button onClick={handleOpenSaveDialog}>
+                    <Save className='mr-2 h-4 w-4' />
+                    保存为订阅
+                  </Button>
                 </div>
                 <div className='mt-4 rounded-lg border bg-muted/50 p-4'>
                   <h3 className='mb-2 font-semibold'>使用说明</h3>
@@ -305,6 +411,62 @@ function SubscriptionGeneratorPage() {
           )}
         </div>
       </main>
+
+      {/* 保存订阅对话框 */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>保存为订阅</DialogTitle>
+            <DialogDescription>
+              将生成的配置保存为订阅文件，保存后可以在订阅管理中查看和使用
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='subscribe-name'>
+                订阅名称 <span className='text-destructive'>*</span>
+              </Label>
+              <Input
+                id='subscribe-name'
+                placeholder='例如：我的订阅'
+                value={subscribeName}
+                onChange={(e) => setSubscribeName(e.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='subscribe-filename'>文件名（可选）</Label>
+              <Input
+                id='subscribe-filename'
+                placeholder='默认使用订阅名称'
+                value={subscribeFilename}
+                onChange={(e) => setSubscribeFilename(e.target.value)}
+              />
+              <p className='text-xs text-muted-foreground'>
+                文件将保存到 subscribes 目录，自动添加 .yaml 扩展名
+              </p>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='subscribe-description'>说明（可选）</Label>
+              <Textarea
+                id='subscribe-description'
+                placeholder='订阅说明...'
+                value={subscribeDescription}
+                onChange={(e) => setSubscribeDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setSaveDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveSubscribe} disabled={saveSubscribeMutation.isPending}>
+              {saveSubscribeMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

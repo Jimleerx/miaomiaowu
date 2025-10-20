@@ -120,13 +120,13 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// 尝试获取流量信息，如果探针未配置则跳过流量统计
 	totalLimit, _, totalUsed, err := h.summary.fetchTotals(r.Context())
-	if err != nil {
-		status := http.StatusBadGateway
-		if errors.Is(err, storage.ErrProbeConfigNotFound) {
-			status = http.StatusServiceUnavailable
-		}
-		writeError(w, status, err)
+	hasTrafficInfo := err == nil
+	// 如果是探针未配置的错误，不返回错误，继续处理
+	if err != nil && !errors.Is(err, storage.ErrProbeConfigNotFound) {
+		// 其他错误才返回
+		writeError(w, http.StatusBadGateway, err)
 		return
 	}
 
@@ -181,7 +181,6 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	headerValue := buildSubscriptionHeader(totalLimit, totalUsed)
 	ext := filepath.Ext(filename)
 	if ext == "" {
 		ext = ".yaml"
@@ -189,7 +188,11 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	attachmentName := url.PathEscape("妙妙屋-" + displayName + ext)
 
 	w.Header().Set("Content-Type", "application/octet-stream; charset=UTF-8")
-	w.Header().Set("subscription-userinfo", headerValue)
+	// 只有在有流量信息时才添加 subscription-userinfo 头
+	if hasTrafficInfo {
+		headerValue := buildSubscriptionHeader(totalLimit, totalUsed)
+		w.Header().Set("subscription-userinfo", headerValue)
+	}
 	w.Header().Set("profile-update-interval", "24")
 	w.Header().Set("content-disposition", "attachment;filename*=UTF-8''"+attachmentName)
 	w.WriteHeader(http.StatusOK)

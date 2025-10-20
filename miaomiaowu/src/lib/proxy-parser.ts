@@ -404,7 +404,7 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
       case 'hysteria2':
         node.password = password // Hysteria2 使用 password 字段
         node.auth = password // 内部临时字段，用于传递认证信息
-        node.ports = queryParams.mport || port.toString()
+        // node.ports = queryParams.mport || port.toString()
         node.obfs = queryParams.obfs
         node['obfs-password'] = queryParams.obfsParam
         node.sni = queryParams.peer || queryParams.sni || (server.startsWith('[') ? '' : server)

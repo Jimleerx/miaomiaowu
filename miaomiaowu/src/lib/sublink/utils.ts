@@ -17,7 +17,7 @@ export function decodeBase64(str: string): string {
 export function encodeBase64(str: string): string {
   try {
     return btoa(
-      encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) =>
+      encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_match, p1) =>
         String.fromCharCode(parseInt(p1, 16))
       )
     )

@@ -1,362 +1,236 @@
-import type { ProxyConfig, ClashProxy, ClashConfig, CustomRule } from './types'
+import type { ProxyConfig, CustomRule } from './types'
 import { deepCopy } from './utils'
-
-const DEFAULT_CLASH_CONFIG: Partial<ClashConfig> = {
-  'mixed-port': 7890,
-  'allow-lan': false,
-  mode: 'rule',
-  'log-level': 'info',
-  'external-controller': '127.0.0.1:9090',
-  dns: {
-    enable: true,
-    listen: '0.0.0.0:53',
-    'enhanced-mode': 'fake-ip',
-    'fake-ip-range': '198.18.0.1/16',
-    nameserver: ['223.5.5.5', '119.29.29.29'],
-    fallback: ['8.8.8.8', '1.1.1.1'],
-  },
-}
-
-const PREDEFINED_RULES: Record<string, string[]> = {
-  minimal: [
-    'DOMAIN-SUFFIX,google.com,PROXY',
-    'DOMAIN-SUFFIX,youtube.com,PROXY',
-    'DOMAIN-SUFFIX,facebook.com,PROXY',
-    'DOMAIN-SUFFIX,twitter.com,PROXY',
-    'GEOIP,CN,DIRECT',
-    'MATCH,PROXY',
-  ],
-  balanced: [
-    'DOMAIN-SUFFIX,google.com,PROXY',
-    'DOMAIN-SUFFIX,googleapis.com,PROXY',
-    'DOMAIN-SUFFIX,youtube.com,PROXY',
-    'DOMAIN-SUFFIX,facebook.com,PROXY',
-    'DOMAIN-SUFFIX,twitter.com,PROXY',
-    'DOMAIN-SUFFIX,telegram.org,PROXY',
-    'DOMAIN-SUFFIX,github.com,PROXY',
-    'DOMAIN-SUFFIX,githubusercontent.com,PROXY',
-    'DOMAIN-KEYWORD,google,PROXY',
-    'GEOIP,CN,DIRECT',
-    'MATCH,PROXY',
-  ],
-  comprehensive: [
-    'DOMAIN-SUFFIX,google.com,PROXY',
-    'DOMAIN-SUFFIX,googleapis.com,PROXY',
-    'DOMAIN-SUFFIX,googleusercontent.com,PROXY',
-    'DOMAIN-SUFFIX,youtube.com,PROXY',
-    'DOMAIN-SUFFIX,ytimg.com,PROXY',
-    'DOMAIN-SUFFIX,facebook.com,PROXY',
-    'DOMAIN-SUFFIX,fbcdn.net,PROXY',
-    'DOMAIN-SUFFIX,twitter.com,PROXY',
-    'DOMAIN-SUFFIX,twimg.com,PROXY',
-    'DOMAIN-SUFFIX,telegram.org,PROXY',
-    'DOMAIN-SUFFIX,github.com,PROXY',
-    'DOMAIN-SUFFIX,githubusercontent.com,PROXY',
-    'DOMAIN-SUFFIX,netflix.com,PROXY',
-    'DOMAIN-SUFFIX,openai.com,PROXY',
-    'DOMAIN-KEYWORD,google,PROXY',
-    'DOMAIN-KEYWORD,youtube,PROXY',
-    'DOMAIN-KEYWORD,facebook,PROXY',
-    'GEOIP,CN,DIRECT',
-    'MATCH,PROXY',
-  ],
-}
+import { DEFAULT_CLASH_CONFIG, CLASH_SITE_RULE_SET_BASE_URL, CLASH_IP_RULE_SET_BASE_URL } from './clash-config'
+import { RULE_CATEGORIES } from './predefined-rules'
+import { translateOutbound, CATEGORY_TO_RULE_NAME } from './translations'
+import { ProxyNode } from '../proxy-parser'
 
 export class ClashConfigBuilder {
-  private proxies: ClashProxy[] = []
-  private config: Partial<ClashConfig>
+  private proxies: ProxyNode[] = []
+  private config: any
 
   constructor(
     private proxyConfigs: ProxyConfig[],
-    private selectedRuleSet: keyof typeof PREDEFINED_RULES = 'balanced',
-    private customRules: CustomRule[] = [],
-    private categoryRules: string[] = []
+    private selectedCategories: string[] = [],
+    private customRules: CustomRule[] = []
   ) {
     this.config = deepCopy(DEFAULT_CLASH_CONFIG)
   }
 
   build(): string {
     this.convertProxies()
+    this.buildRuleProviders()
     this.buildProxyGroups()
     this.buildRules()
 
-    const config: ClashConfig = {
-      ...this.config,
-      proxies: this.proxies,
-    } as ClashConfig
-
-    // Convert to YAML format (simple implementation)
-    return this.toYAML(config)
+    // Convert to YAML
+    return this.toYAML(this.config)
   }
 
   private convertProxies(): void {
-    this.proxies = this.proxyConfigs
-      .map((proxy) => this.convertProxy(proxy))
-      .filter((p): p is ClashProxy => p !== null)
+    this.config.proxies = this.proxyConfigs
   }
+  private buildRuleProviders(): void {
+    const ruleProviders: any = {}
+    const siteRules = new Set<string>()
+    const ipRules = new Set<string>()
 
-  private convertProxy(proxy: ProxyConfig): ClashProxy | null {
-    try {
-      switch (proxy.type) {
-        case 'shadowsocks':
-          return {
-            name: proxy.tag,
-            type: 'ss',
-            server: proxy.server,
-            port: proxy.server_port,
-            cipher: proxy.method || 'aes-256-gcm',
-            password: proxy.password || '',
-          }
+    // Collect rules from selected categories
+    for (const categoryName of this.selectedCategories) {
+      const category = RULE_CATEGORIES.find((c) => c.name === categoryName)
+      if (!category) continue
 
-        case 'vmess':
-          return {
-            name: proxy.tag,
-            type: 'vmess',
-            server: proxy.server,
-            port: proxy.server_port,
-            uuid: proxy.uuid || '',
-            alterId: proxy.alter_id || 0,
-            cipher: proxy.security || 'auto',
-            tls: proxy.tls?.enabled || false,
-            servername: proxy.tls?.server_name || '',
-            'skip-cert-verify': proxy.tls?.insecure || false,
-            network: proxy.transport?.type || 'tcp',
-            'ws-opts':
-              proxy.transport?.type === 'ws'
-                ? {
-                    path: proxy.transport.path || '/',
-                    headers: proxy.transport.headers || {},
-                  }
-                : undefined,
-          }
-
-        case 'vless':
-          return {
-            name: proxy.tag,
-            type: 'vless',
-            server: proxy.server,
-            port: proxy.server_port,
-            uuid: proxy.uuid || '',
-            cipher: proxy.security,
-            tls: proxy.tls?.enabled || false,
-            servername: proxy.tls?.server_name || '',
-            network: proxy.transport?.type || 'tcp',
-            'ws-opts':
-              proxy.transport?.type === 'ws'
-                ? {
-                    path: proxy.transport.path,
-                    headers: proxy.transport.headers,
-                  }
-                : undefined,
-            'grpc-opts':
-              proxy.transport?.type === 'grpc'
-                ? {
-                    'grpc-service-name': proxy.transport.service_name,
-                  }
-                : undefined,
-            'skip-cert-verify': proxy.tls?.insecure || false,
-          }
-
-        case 'hysteria2':
-          return {
-            name: proxy.tag,
-            type: 'hysteria2',
-            server: proxy.server,
-            port: proxy.server_port,
-            password: proxy.password || '',
-            sni: proxy.tls?.server_name || '',
-            'skip-cert-verify': proxy.tls?.insecure || true,
-          }
-
-        case 'trojan':
-          return {
-            name: proxy.tag,
-            type: 'trojan',
-            server: proxy.server,
-            port: proxy.server_port,
-            password: proxy.password || '',
-            cipher: proxy.security,
-            tls: proxy.tls?.enabled || false,
-            sni: proxy.tls?.server_name || '',
-            network: proxy.transport?.type || 'tcp',
-            'ws-opts':
-              proxy.transport?.type === 'ws'
-                ? {
-                    path: proxy.transport.path,
-                    headers: proxy.transport.headers,
-                  }
-                : undefined,
-            'grpc-opts':
-              proxy.transport?.type === 'grpc'
-                ? {
-                    'grpc-service-name': proxy.transport.service_name,
-                  }
-                : undefined,
-            'skip-cert-verify': proxy.tls?.insecure || false,
-          }
-
-        case 'tuic':
-          return {
-            name: proxy.tag,
-            type: 'tuic',
-            server: proxy.server,
-            port: proxy.server_port,
-            uuid: proxy.uuid || '',
-            password: proxy.password || '',
-            'skip-cert-verify': proxy.tls?.insecure || false,
-            'disable-sni': true,
-            alpn: proxy.tls?.alpn,
-            sni: proxy.tls?.server_name,
-            'udp-relay-mode': 'native',
-          }
-
-        default:
-          return null
-      }
-    } catch (e) {
-      console.error('Failed to convert proxy:', e)
-      return null
+      category.site_rules.forEach((rule) => siteRules.add(rule))
+      category.ip_rules.forEach((rule) => ipRules.add(rule))
     }
+
+    // Build site rule providers
+    siteRules.forEach((rule) => {
+      ruleProviders[rule] = {
+        type: 'http',
+        format: 'mrs',
+        behavior: 'domain',
+        url: `${CLASH_SITE_RULE_SET_BASE_URL}${rule}.mrs`,
+        path: `./ruleset/${rule}.mrs`,
+        interval: 86400,
+      }
+    })
+
+    // Build IP rule providers
+    ipRules.forEach((rule) => {
+      ruleProviders[rule] = {
+        type: 'http',
+        format: 'mrs',
+        behavior: 'ipcidr',
+        url: `${CLASH_IP_RULE_SET_BASE_URL}${rule}.mrs`,
+        path: `./ruleset/${rule}.mrs`,
+        interval: 86400,
+      }
+    })
+
+    this.config['rule-providers'] = ruleProviders
   }
 
   private buildProxyGroups(): void {
     const proxyNames = this.proxies.map((p) => p.name)
-    const groups: any[] = [
-      {
-        name: 'PROXY',
-        type: 'select',
-        proxies: ['Auto', 'DIRECT', ...proxyNames],
-      },
-      {
-        name: 'Auto',
-        type: 'url-test',
-        proxies: proxyNames,
-        url: 'http://www.gstatic.com/generate_204',
-        interval: 300,
-      },
-    ]
+    const groups: any[] = []
 
-    // Add custom rule groups
-    for (const rule of this.customRules) {
-      if (rule.name && !groups.find((g) => g.name === rule.name)) {
-        groups.push({
-          name: rule.name,
-          type: 'select',
-          proxies: ['PROXY', 'DIRECT', 'Auto', ...proxyNames],
-        })
-      }
+    // 1. Node Select group
+    groups.push({
+      name: translateOutbound('Node Select'),
+      type: 'select',
+      proxies: ['DIRECT', 'REJECT', translateOutbound('Auto Select'), ...proxyNames],
+    })
+
+    // 2. Auto Select group
+    groups.push({
+      name: translateOutbound('Auto Select'),
+      type: 'url-test',
+      proxies: proxyNames,
+      url: 'https://www.gstatic.com/generate_204',
+      interval: 300,
+      lazy: false,
+    })
+
+    // 3. Category-specific groups
+    for (const categoryName of this.selectedCategories) {
+      const ruleName = CATEGORY_TO_RULE_NAME[categoryName]
+      if (!ruleName) continue
+
+      groups.push({
+        name: translateOutbound(ruleName),
+        type: 'select',
+        proxies: [
+          translateOutbound('Node Select'),
+          'DIRECT',
+          'REJECT',
+          translateOutbound('Auto Select'),
+          ...proxyNames,
+        ],
+      })
     }
+
+    // 4. Custom rule groups
+    for (const rule of this.customRules) {
+      if (!rule.name) continue
+
+      groups.push({
+        name: translateOutbound(rule.name),
+        type: 'select',
+        proxies: [
+          translateOutbound('Node Select'),
+          'DIRECT',
+          'REJECT',
+          translateOutbound('Auto Select'),
+          ...proxyNames,
+        ],
+      })
+    }
+
+    // 5. Fall Back group
+    groups.push({
+      name: translateOutbound('Fall Back'),
+      type: 'select',
+      proxies: [
+        translateOutbound('Node Select'),
+        'DIRECT',
+        'REJECT',
+        translateOutbound('Auto Select'),
+        ...proxyNames,
+      ],
+    })
 
     this.config['proxy-groups'] = groups
   }
 
   private buildRules(): void {
-    let rules: string[] = []
+    const rules: string[] = []
 
-    // Add custom rules first (higher priority)
-    if (this.customRules.length > 0) {
-      for (const rule of this.customRules) {
-        if (!rule.name) continue
+    // Custom rules first (domain-based)
+    for (const rule of this.customRules) {
+      if (!rule.name) continue
 
-        // GeoSite rules
-        if (rule.site) {
-          rule.site.split(',').forEach((site) => {
-            const trimmed = site.trim()
-            if (trimmed) {
-              rules.push(`GEOSITE,${trimmed},${rule.name}`)
-            }
-          })
-        }
+      const outbound = translateOutbound(rule.name)
 
-        // Domain suffix rules
-        if (rule.domain_suffix) {
-          rule.domain_suffix.split(',').forEach((domain) => {
-            const trimmed = domain.trim()
-            if (trimmed) {
-              rules.push(`DOMAIN-SUFFIX,${trimmed},${rule.name}`)
-            }
-          })
-        }
+      if (rule.domain_suffix) {
+        rule.domain_suffix.split(',').forEach((domain) => {
+          const trimmed = domain.trim()
+          if (trimmed) rules.push(`DOMAIN-SUFFIX,${trimmed},${outbound}`)
+        })
+      }
 
-        // Domain keyword rules
-        if (rule.domain_keyword) {
-          rule.domain_keyword.split(',').forEach((keyword) => {
-            const trimmed = keyword.trim()
-            if (trimmed) {
-              rules.push(`DOMAIN-KEYWORD,${trimmed},${rule.name}`)
-            }
-          })
-        }
-
-        // GeoIP rules
-        if (rule.ip) {
-          rule.ip.split(',').forEach((geoip) => {
-            const trimmed = geoip.trim().toUpperCase()
-            if (trimmed) {
-              rules.push(`GEOIP,${trimmed},${rule.name}`)
-            }
-          })
-        }
-
-        // IP-CIDR rules
-        if (rule.ip_cidr) {
-          rule.ip_cidr.split(',').forEach((cidr) => {
-            const trimmed = cidr.trim()
-            if (trimmed) {
-              rules.push(`IP-CIDR,${trimmed},${rule.name}`)
-            }
-          })
-        }
-
-        // Protocol rules (Clash Meta/Mihomo only)
-        if (rule.protocol) {
-          rule.protocol.split(',').forEach((protocol) => {
-            const trimmed = protocol.trim().toUpperCase()
-            if (trimmed) {
-              rules.push(`PROTOCOL,${trimmed},${rule.name}`)
-            }
-          })
-        }
+      if (rule.domain_keyword) {
+        rule.domain_keyword.split(',').forEach((keyword) => {
+          const trimmed = keyword.trim()
+          if (trimmed) rules.push(`DOMAIN-KEYWORD,${trimmed},${outbound}`)
+        })
       }
     }
 
-    // Add category rules (if custom rule set is selected)
-    if (this.categoryRules.length > 0) {
-      rules = [...rules, ...this.categoryRules]
-    }
+    // Category rules (RULE-SET format)
+    for (const categoryName of this.selectedCategories) {
+      const category = RULE_CATEGORIES.find((c) => c.name === categoryName)
+      if (!category) continue
 
-    // Add predefined rules (if not custom)
-    if (this.selectedRuleSet !== 'custom') {
-      if (this.selectedRuleSet in PREDEFINED_RULES) {
-        rules = [...rules, ...PREDEFINED_RULES[this.selectedRuleSet]]
-      } else {
-        rules = [...rules, ...PREDEFINED_RULES.balanced]
+      const ruleName = CATEGORY_TO_RULE_NAME[categoryName]
+      if (!ruleName) continue
+
+      const outbound = translateOutbound(ruleName)
+
+      // Site rules
+      for (const siteRule of category.site_rules) {
+        rules.push(`RULE-SET,${siteRule},${outbound}`)
       }
     }
 
-    // Ensure there's always a final MATCH rule
-    if (!rules.some((r) => r.startsWith('MATCH,'))) {
-      rules.push('MATCH,PROXY')
+    // Custom rules (IP-based) after site rules
+    for (const rule of this.customRules) {
+      if (!rule.name) continue
+
+      const outbound = translateOutbound(rule.name)
+
+      if (rule.ip_cidr) {
+        rule.ip_cidr.split(',').forEach((cidr) => {
+          const trimmed = cidr.trim()
+          if (trimmed) rules.push(`IP-CIDR,${trimmed},${outbound},no-resolve`)
+        })
+      }
     }
+
+    // Category IP rules
+    for (const categoryName of this.selectedCategories) {
+      const category = RULE_CATEGORIES.find((c) => c.name === categoryName)
+      if (!category) continue
+
+      const ruleName = CATEGORY_TO_RULE_NAME[categoryName]
+      if (!ruleName) continue
+
+      const outbound = translateOutbound(ruleName)
+
+      // IP rules
+      for (const ipRule of category.ip_rules) {
+        rules.push(`RULE-SET,${ipRule},${outbound},no-resolve`)
+      }
+    }
+
+    // Final MATCH rule
+    rules.push(`MATCH,${translateOutbound('Fall Back')}`)
 
     this.config.rules = rules
   }
 
-  private toYAML(obj: any, indent: number = 0, isArrayItem: boolean = false): string {
+  private toYAML(obj: any, indent: number = 0): string {
     const spaces = '  '.repeat(indent)
     let yaml = ''
 
     if (Array.isArray(obj)) {
-      for (let i = 0; i < obj.length; i++) {
-        const item = obj[i]
+      for (const item of obj) {
         if (typeof item === 'object' && item !== null) {
-          // For objects in arrays, put first property on same line as dash
           const entries = Object.entries(item).filter(([_, v]) => v !== undefined)
           if (entries.length > 0) {
             const [firstKey, firstValue] = entries[0]
             const restEntries = entries.slice(1)
 
-            // First line: - key: value
             if (Array.isArray(firstValue)) {
               yaml += `${spaces}- ${firstKey}:\n${this.toYAML(firstValue, indent + 2)}`
             } else if (typeof firstValue === 'object' && firstValue !== null) {
@@ -365,7 +239,6 @@ export class ClashConfigBuilder {
               yaml += `${spaces}- ${firstKey}: ${this.formatValue(firstValue)}\n`
             }
 
-            // Rest of the properties
             for (const [key, value] of restEntries) {
               if (Array.isArray(value)) {
                 yaml += `${spaces}  ${key}:\n${this.toYAML(value, indent + 2)}`
@@ -399,12 +272,12 @@ export class ClashConfigBuilder {
 
   private formatValue(value: any): string {
     if (typeof value === 'string') {
-      // Quote strings that contain special characters
       if (
         value.includes(':') ||
         value.includes('#') ||
         value.includes('[') ||
-        value.includes(']')
+        value.includes(']') ||
+        value.includes(',')
       ) {
         return `"${value}"`
       }

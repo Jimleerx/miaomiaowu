@@ -46,9 +46,11 @@ func (h *subscribeFilesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		h.handleImport(w, r)
 	case path == "upload" && r.Method == http.MethodPost:
 		h.handleUpload(w, r)
-	case path != "" && path != "import" && path != "upload" && (r.Method == http.MethodPut || r.Method == http.MethodPatch):
+	case path == "create-from-config" && r.Method == http.MethodPost:
+		h.handleCreateFromConfig(w, r)
+	case path != "" && path != "import" && path != "upload" && path != "create-from-config" && (r.Method == http.MethodPut || r.Method == http.MethodPatch):
 		h.handleUpdate(w, r, path)
-	case path != "" && path != "import" && path != "upload" && r.Method == http.MethodDelete:
+	case path != "" && path != "import" && path != "upload" && path != "create-from-config" && r.Method == http.MethodDelete:
 		h.handleDelete(w, r, path)
 	default:
 		allowed := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
@@ -493,4 +495,85 @@ func (h *subscribeFilesHandler) convertSubscribeFilesWithVersions(ctx context.Co
 		result = append(result, dto)
 	}
 	return result
+}
+
+// handleCreateFromConfig 保存生成的配置为订阅文件
+func (h *subscribeFilesHandler) handleCreateFromConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Filename    string `json:"filename"`
+		Content     string `json:"content"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "请求格式不正确")
+		return
+	}
+
+	if req.Name == "" {
+		writeBadRequest(w, "订阅名称是必填项")
+		return
+	}
+	if req.Content == "" {
+		writeBadRequest(w, "配置内容不能为空")
+		return
+	}
+
+	// 设置默认文件名
+	filename := req.Filename
+	if filename == "" {
+		filename = req.Name
+	}
+
+	// 确保文件名有.yaml或.yml扩展名
+	ext := filepath.Ext(filename)
+	if ext != ".yaml" && ext != ".yml" {
+		filename = filename + ".yaml"
+	}
+
+	// 验证YAML格式
+	var yamlCheck map[string]any
+	if err := yaml.Unmarshal([]byte(req.Content), &yamlCheck); err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("配置内容不是有效的YAML格式"))
+		return
+	}
+
+	// 保存文件到subscribes目录
+	subscribesDir := "subscribes"
+	if err := os.MkdirAll(subscribesDir, 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("创建订阅目录失败"))
+		return
+	}
+
+	filePath := filepath.Join(subscribesDir, filename)
+	if err := os.WriteFile(filePath, []byte(req.Content), 0644); err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("保存订阅文件失败"))
+		return
+	}
+
+	// 保存到数据库
+	file := storage.SubscribeFile{
+		Name:        req.Name,
+		Description: req.Description,
+		URL:         "",
+		Type:        storage.SubscribeTypeCreate,
+		Filename:    filename,
+	}
+
+	created, err := h.repo.CreateSubscribeFile(r.Context(), file)
+	if err != nil {
+		// 如果数据库保存失败，删除已保存的文件
+		_ = os.Remove(filePath)
+		if errors.Is(err, storage.ErrSubscribeFileExists) {
+			writeError(w, http.StatusConflict, errors.New("订阅名称已存在"))
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]any{
+		"file": convertSubscribeFile(created),
+	})
 }
