@@ -59,7 +59,7 @@ function DashboardPage() {
     enabled: Boolean(auth.accessToken),
   })
 
-  const metrics = data?.metrics ?? {}
+  const metrics = useMemo(() => data?.metrics ?? {}, [data?.metrics])
 
   const cards = useMemo(
     () => [

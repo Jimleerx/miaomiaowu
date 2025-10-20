@@ -71,9 +71,9 @@ export interface ClashProxy {
   servername?: string
   'skip-cert-verify'?: boolean
   network?: string
-  'ws-opts'?: any
-  'grpc-opts'?: any
-  'http-opts'?: any
+  'ws-opts'?: Record<string, unknown>
+  'grpc-opts'?: Record<string, unknown>
+  'http-opts'?: Record<string, unknown>
   flow: string
 }
 

@@ -45,7 +45,7 @@ export function RuleSelector({
       const presetCategories = PREDEFINED_RULE_SETS[ruleSet] || []
       onCategoriesChange(presetCategories)
     }
-  }, [ruleSet])
+  }, [ruleSet, onCategoriesChange])
 
   const handleCategoryToggle = (categoryName: string) => {
     if (selectedCategories.includes(categoryName)) {

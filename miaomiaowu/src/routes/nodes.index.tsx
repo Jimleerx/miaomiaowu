@@ -83,7 +83,7 @@ function NodesPage() {
     enabled: Boolean(auth.accessToken),
   })
 
-  const savedNodes = nodesData?.nodes ?? []
+  const savedNodes = useMemo(() => nodesData?.nodes ?? [], [nodesData?.nodes])
 
   // 批量创建节点
   const batchCreateMutation = useMutation({

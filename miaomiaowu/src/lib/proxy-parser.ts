@@ -627,7 +627,7 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
   for (const [key, value] of Object.entries(node)) {
     if (value !== undefined &&
         !excludeKeys.has(key) &&
-        !clash.hasOwnProperty(key) &&
+        !Object.prototype.hasOwnProperty.call(clash, key) &&
         key !== 'tls' && // tls 已经被处理过了
         key !== 'security' && // security 已经被处理过了
         key !== 'sni' // sni 已经映射为 servername
@@ -636,7 +636,7 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
       const mappedKey = paramMapping[key] || key
 
       // 避免重复添加已处理的参数
-      if (!clash.hasOwnProperty(mappedKey)) {
+      if (!Object.prototype.hasOwnProperty.call(clash, mappedKey)) {
         clash[mappedKey] = value
       }
     }

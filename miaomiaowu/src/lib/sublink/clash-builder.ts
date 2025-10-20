@@ -7,7 +7,7 @@ import { translateOutbound, CATEGORY_TO_RULE_NAME } from './translations'
 
 export class ClashConfigBuilder {
   private proxies: ProxyConfig[] = []
-  private config: any
+  private config: Record<string, unknown>
 
   constructor(
     private proxyConfigs: ProxyConfig[],
@@ -32,7 +32,7 @@ export class ClashConfigBuilder {
     this.proxies = this.proxyConfigs
   }
   private buildRuleProviders(): void {
-    const ruleProviders: any = {}
+    const ruleProviders: Record<string, unknown> = {}
     const siteRules = new Set<string>()
     const ipRules = new Set<string>()
 
@@ -74,7 +74,7 @@ export class ClashConfigBuilder {
   
   public buildProxyGroups(): void {
     const proxyNames = this.proxies.map((p) => p.name)
-    const groups: any[] = []
+    const groups: Record<string, unknown>[] = []
 
     // 1. Node Select group
     groups.push({
@@ -220,7 +220,7 @@ export class ClashConfigBuilder {
     this.config.rules = rules
   }
 
-  private toYAML(obj: any, indent: number = 0): string {
+  private toYAML(obj: unknown, indent: number = 0): string {
     const spaces = '  '.repeat(indent)
     let yaml = ''
 
@@ -271,7 +271,7 @@ export class ClashConfigBuilder {
     return yaml
   }
 
-  private formatValue(value: any): string {
+  private formatValue(value: unknown): string {
     if (typeof value === 'string') {
       if (
         value.includes(':') ||
