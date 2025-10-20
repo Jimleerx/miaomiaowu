@@ -37,6 +37,7 @@ type ParsedNode = {
   parsed_config: string
   clash_config: string
   enabled: boolean
+  tag: string
   created_at: string
   updated_at: string
 }
@@ -69,6 +70,8 @@ function NodesPage() {
   const [subscriptionUrl, setSubscriptionUrl] = useState('')
   const [tempNodes, setTempNodes] = useState<TempNode[]>([])
   const [selectedProtocol, setSelectedProtocol] = useState<string>('all')
+  const [currentTag, setCurrentTag] = useState<string>('manual') // 'manual' 或 'subscription'
+  const [tagFilter, setTagFilter] = useState<string>('all')
 
   // 获取已保存的节点
   const { data: nodesData } = useQuery({
@@ -85,6 +88,8 @@ function NodesPage() {
   // 批量创建节点
   const batchCreateMutation = useMutation({
     mutationFn: async (nodes: TempNode[]) => {
+      const tag = currentTag === 'manual' ? '手动输入' : '订阅导入'
+
       const payload = nodes.map(n => ({
         raw_url: n.rawUrl,
         node_name: n.parsed?.name || '未知',
@@ -92,6 +97,7 @@ function NodesPage() {
         parsed_config: n.parsed ? JSON.stringify(n.parsed) : '',
         clash_config: n.clash ? JSON.stringify(n.clash) : '',
         enabled: n.enabled,
+        tag: tag,
       }))
 
       const response = await api.post('/api/nodes/batch', { nodes: payload })
@@ -188,6 +194,7 @@ function NodesPage() {
       })
 
       setTempNodes(parsed)
+      setCurrentTag('subscription') // 订阅导入
       toast.success(`成功导入 ${data.count} 个节点`)
     },
     onError: (error: any) => {
@@ -216,6 +223,7 @@ function NodesPage() {
     }
 
     setTempNodes(parsed)
+    setCurrentTag('manual') // 手动输入
   }
 
   const handleSave = () => {
@@ -272,6 +280,7 @@ function NodesPage() {
         parsed,
         clash,
         enabled: n.enabled,
+        tag: n.tag || '手动输入',
         isSaved: true,
         dbId: n.id,
       }
@@ -288,15 +297,38 @@ function NodesPage() {
   }, [savedNodes, tempNodes])
 
   const filteredNodes = useMemo(() => {
-    if (selectedProtocol === 'all') return displayNodes
-    return displayNodes.filter(node => node.parsed?.type === selectedProtocol)
-  }, [displayNodes, selectedProtocol])
+    let nodes = displayNodes
+
+    // 按协议筛选
+    if (selectedProtocol !== 'all') {
+      nodes = nodes.filter(node => node.parsed?.type === selectedProtocol)
+    }
+
+    // 按标签筛选
+    if (tagFilter !== 'all') {
+      nodes = nodes.filter(node => node.tag === tagFilter)
+    }
+
+    return nodes
+  }, [displayNodes, selectedProtocol, tagFilter])
 
   const protocolCounts = useMemo(() => {
     const counts: Record<string, number> = { all: displayNodes.length }
     for (const protocol of PROTOCOLS) {
       counts[protocol] = displayNodes.filter(n => n.parsed?.type === protocol).length
     }
+    return counts
+  }, [displayNodes])
+
+  const tagCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: displayNodes.length }
+    const tags = new Set<string>()
+    displayNodes.forEach(node => {
+      if (node.tag) {
+        tags.add(node.tag)
+        counts[node.tag] = (counts[node.tag] || 0) + 1
+      }
+    })
     return counts
   }, [displayNodes])
 
@@ -415,28 +447,57 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
               </CardHeader>
               <CardContent className='space-y-4'>
                 {/* 协议筛选按钮 */}
-                <div className='flex flex-wrap gap-2'>
-                  <Button
-                    size='sm'
-                    variant={selectedProtocol === 'all' ? 'default' : 'outline'}
-                    onClick={() => setSelectedProtocol('all')}
-                  >
-                    全部 ({protocolCounts.all})
-                  </Button>
-                  {PROTOCOLS.map(protocol => {
-                    const count = protocolCounts[protocol] || 0
-                    if (count === 0) return null
-                    return (
+                <div className='space-y-3'>
+                  <div>
+                    <div className='text-sm font-medium mb-2'>按协议筛选</div>
+                    <div className='flex flex-wrap gap-2'>
                       <Button
-                        key={protocol}
                         size='sm'
-                        variant={selectedProtocol === protocol ? 'default' : 'outline'}
-                        onClick={() => setSelectedProtocol(protocol)}
+                        variant={selectedProtocol === 'all' ? 'default' : 'outline'}
+                        onClick={() => setSelectedProtocol('all')}
                       >
-                        {protocol.toUpperCase()} ({count})
+                        全部 ({protocolCounts.all})
                       </Button>
-                    )
-                  })}
+                      {PROTOCOLS.map(protocol => {
+                        const count = protocolCounts[protocol] || 0
+                        if (count === 0) return null
+                        return (
+                          <Button
+                            key={protocol}
+                            size='sm'
+                            variant={selectedProtocol === protocol ? 'default' : 'outline'}
+                            onClick={() => setSelectedProtocol(protocol)}
+                          >
+                            {protocol.toUpperCase()} ({count})
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 标签筛选按钮 */}
+                  <div>
+                    <div className='text-sm font-medium mb-2'>按标签筛选</div>
+                    <div className='flex flex-wrap gap-2'>
+                      <Button
+                        size='sm'
+                        variant={tagFilter === 'all' ? 'default' : 'outline'}
+                        onClick={() => setTagFilter('all')}
+                      >
+                        全部 ({tagCounts.all})
+                      </Button>
+                      {Object.keys(tagCounts).filter(tag => tag !== 'all' && tagCounts[tag] > 0).map(tag => (
+                        <Button
+                          key={tag}
+                          size='sm'
+                          variant={tagFilter === tag ? 'default' : 'outline'}
+                          onClick={() => setTagFilter(tag)}
+                        >
+                          {tag} ({tagCounts[tag]})
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {/* 节点表格 */}
@@ -446,6 +507,7 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                       <TableRow>
                         <TableHead className='w-[100px]'>协议</TableHead>
                         <TableHead className='min-w-[150px]'>节点名称</TableHead>
+                        <TableHead className='w-[100px]'>标签</TableHead>
                         <TableHead className='min-w-[200px]'>服务器地址</TableHead>
                         <TableHead className='min-w-[200px]'>Clash 配置</TableHead>
                         <TableHead className='w-[80px] text-center'>启用</TableHead>
@@ -455,7 +517,7 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                     <TableBody>
                       {filteredNodes.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className='text-center text-muted-foreground py-8'>
+                          <TableCell colSpan={7} className='text-center text-muted-foreground py-8'>
                             没有找到匹配的节点
                           </TableCell>
                         </TableRow>
@@ -481,6 +543,13 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                   <Badge variant='secondary' className='text-xs'>已保存</Badge>
                                 )}
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              {node.isSaved && node.tag && (
+                                <Badge variant='outline' className='text-xs'>
+                                  {node.tag}
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className='text-sm text-muted-foreground'>

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Link as LinkIcon, Radar, Users, Database } from 'lucide-react'
+import { Activity, Link as LinkIcon, Radar, Users, Database, Zap, Network } from 'lucide-react'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { UserMenu } from './user-menu'
 import { useAuthStore } from '@/stores/auth-store'
@@ -18,11 +18,16 @@ const baseNavLinks = [
     to: '/subscription',
     icon: LinkIcon,
   },
-  // {
-  //   title: '节点管理',
-  //   to: '/nodes',
-  //   icon: Network,
-  // },
+  {
+    title: '生成订阅',
+    to: '/generator',
+    icon: Zap,
+  },
+  {
+    title: '节点管理',
+    to: '/nodes',
+    icon: Network,
+  },
 ]
 
 const adminNavLinks = [

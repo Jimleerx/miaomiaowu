@@ -135,6 +135,7 @@ function LoginView() {
               <Label htmlFor='username'>用户名</Label>
               <Input
                 id='username'
+                name='username'
                 type='text'
                 autoCapitalize='none'
                 autoComplete='username'
@@ -147,6 +148,7 @@ function LoginView() {
               <Label htmlFor='password'>密码</Label>
               <Input
                 id='password'
+                name='password'
                 type='password'
                 autoComplete='current-password'
                 placeholder='请输入密码'
@@ -226,6 +228,7 @@ function InitialSetupView() {
               </Label>
               <Input
                 id='setup-username'
+                name='username'
                 type='text'
                 autoCapitalize='none'
                 autoComplete='username'
@@ -240,6 +243,7 @@ function InitialSetupView() {
               </Label>
               <Input
                 id='setup-password'
+                name='password'
                 type='password'
                 autoComplete='new-password'
                 placeholder='请输入密码'
@@ -250,6 +254,7 @@ function InitialSetupView() {
               <Label htmlFor='setup-nickname'>昵称</Label>
               <Input
                 id='setup-nickname'
+                name='nickname'
                 type='text'
                 autoComplete='name'
                 placeholder='留空则使用用户名'
@@ -260,6 +265,7 @@ function InitialSetupView() {
               <Label htmlFor='setup-email'>邮箱</Label>
               <Input
                 id='setup-email'
+                name='email'
                 type='email'
                 autoComplete='email'
                 placeholder='可选'
@@ -270,7 +276,9 @@ function InitialSetupView() {
               <Label htmlFor='setup-avatar'>头像地址</Label>
               <Input
                 id='setup-avatar'
+                name='avatar_url'
                 type='url'
+                autoComplete='url'
                 placeholder='可选，填写头像图片URL'
                 {...form.register('avatar_url')}
               />

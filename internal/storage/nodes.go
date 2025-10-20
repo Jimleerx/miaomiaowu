@@ -19,7 +19,7 @@ func (r *TrafficRepository) ListNodes(ctx context.Context, username string) ([]N
 		return nil, errors.New("username is required")
 	}
 
-	rows, err := r.db.QueryContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, created_at, updated_at FROM nodes WHERE username = ? ORDER BY created_at DESC`, username)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, COALESCE(tag, 'personal'), created_at, updated_at FROM nodes WHERE username = ? ORDER BY created_at DESC`, username)
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
@@ -29,7 +29,7 @@ func (r *TrafficRepository) ListNodes(ctx context.Context, username string) ([]N
 	for rows.Next() {
 		var node Node
 		var enabled int
-		if err := rows.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.CreatedAt, &node.UpdatedAt); err != nil {
+		if err := rows.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.Tag, &node.CreatedAt, &node.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan node: %w", err)
 		}
 		node.Enabled = enabled != 0
@@ -60,8 +60,8 @@ func (r *TrafficRepository) GetNode(ctx context.Context, id int64, username stri
 	}
 
 	var enabled int
-	row := r.db.QueryRowContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, created_at, updated_at FROM nodes WHERE id = ? AND username = ? LIMIT 1`, id, username)
-	if err := row.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.CreatedAt, &node.UpdatedAt); err != nil {
+	row := r.db.QueryRowContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, COALESCE(tag, 'personal'), created_at, updated_at FROM nodes WHERE id = ? AND username = ? LIMIT 1`, id, username)
+	if err := row.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.Tag, &node.CreatedAt, &node.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return node, ErrNodeNotFound
 		}
@@ -82,6 +82,7 @@ func (r *TrafficRepository) CreateNode(ctx context.Context, node Node) (Node, er
 	node.RawURL = strings.TrimSpace(node.RawURL)
 	node.NodeName = strings.TrimSpace(node.NodeName)
 	node.Protocol = strings.ToLower(strings.TrimSpace(node.Protocol))
+	node.Tag = strings.TrimSpace(node.Tag)
 
 	if node.Username == "" {
 		return Node{}, errors.New("username is required")
@@ -96,13 +97,16 @@ func (r *TrafficRepository) CreateNode(ctx context.Context, node Node) (Node, er
 	if node.Protocol == "" {
 		return Node{}, errors.New("protocol is required")
 	}
+	if node.Tag == "" {
+		node.Tag = "手动输入"
+	}
 
 	enabled := 0
 	if node.Enabled {
 		enabled = 1
 	}
 
-	res, err := r.db.ExecContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)`, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled)
+	res, err := r.db.ExecContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag)
 	if err != nil {
 		return Node{}, fmt.Errorf("create node: %w", err)
 	}
@@ -129,6 +133,7 @@ func (r *TrafficRepository) UpdateNode(ctx context.Context, node Node) (Node, er
 	node.RawURL = strings.TrimSpace(node.RawURL)
 	node.NodeName = strings.TrimSpace(node.NodeName)
 	node.Protocol = strings.ToLower(strings.TrimSpace(node.Protocol))
+	node.Tag = strings.TrimSpace(node.Tag)
 
 	if node.Username == "" {
 		return Node{}, errors.New("username is required")
@@ -143,13 +148,16 @@ func (r *TrafficRepository) UpdateNode(ctx context.Context, node Node) (Node, er
 	if node.Protocol == "" {
 		return Node{}, errors.New("protocol is required")
 	}
+	if node.Tag == "" {
+		node.Tag = "手动输入"
+	}
 
 	enabled := 0
 	if node.Enabled {
 		enabled = 1
 	}
 
-	res, err := r.db.ExecContext(ctx, `UPDATE nodes SET raw_url = ?, node_name = ?, protocol = ?, parsed_config = ?, clash_config = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND username = ?`, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.ID, node.Username)
+	res, err := r.db.ExecContext(ctx, `UPDATE nodes SET raw_url = ?, node_name = ?, protocol = ?, parsed_config = ?, clash_config = ?, enabled = ?, tag = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND username = ?`, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, node.ID, node.Username)
 	if err != nil {
 		return Node{}, fmt.Errorf("update node: %w", err)
 	}
@@ -212,7 +220,7 @@ func (r *TrafficRepository) BatchCreateNodes(ctx context.Context, nodes []Node) 
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return nil, fmt.Errorf("prepare insert node: %w", err)
 	}
@@ -224,6 +232,7 @@ func (r *TrafficRepository) BatchCreateNodes(ctx context.Context, nodes []Node) 
 		node.RawURL = strings.TrimSpace(node.RawURL)
 		node.NodeName = strings.TrimSpace(node.NodeName)
 		node.Protocol = strings.ToLower(strings.TrimSpace(node.Protocol))
+		node.Tag = strings.TrimSpace(node.Tag)
 
 		if node.Username == "" {
 			return nil, fmt.Errorf("node %d: username is required", idx+1)
@@ -238,13 +247,16 @@ func (r *TrafficRepository) BatchCreateNodes(ctx context.Context, nodes []Node) 
 		if node.Protocol == "" {
 			return nil, fmt.Errorf("node %d: protocol is required", idx+1)
 		}
+		if node.Tag == "" {
+			node.Tag = "手动输入"
+		}
 
 		enabled := 0
 		if node.Enabled {
 			enabled = 1
 		}
 
-		res, err := stmt.ExecContext(ctx, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled)
+		res, err := stmt.ExecContext(ctx, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag)
 		if err != nil {
 			return nil, fmt.Errorf("insert node %d: %w", idx+1, err)
 		}

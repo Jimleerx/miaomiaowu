@@ -98,6 +98,7 @@ func (h *nodesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		ParsedConfig: req.ParsedConfig,
 		ClashConfig:  req.ClashConfig,
 		Enabled:      req.Enabled,
+		Tag:          req.Tag,
 	}
 
 	created, err := h.repo.CreateNode(r.Context(), node)
@@ -146,6 +147,7 @@ func (h *nodesHandler) handleBatchCreate(w http.ResponseWriter, r *http.Request)
 			ParsedConfig: n.ParsedConfig,
 			ClashConfig:  n.ClashConfig,
 			Enabled:      n.Enabled,
+			Tag:          n.Tag,
 		})
 	}
 
@@ -209,6 +211,9 @@ func (h *nodesHandler) handleUpdate(w http.ResponseWriter, r *http.Request, idSe
 	}
 	if req.ClashConfig != "" {
 		existing.ClashConfig = req.ClashConfig
+	}
+	if req.Tag != "" {
+		existing.Tag = req.Tag
 	}
 	existing.Enabled = req.Enabled
 
@@ -274,6 +279,7 @@ type nodeRequest struct {
 	ParsedConfig string `json:"parsed_config"`
 	ClashConfig  string `json:"clash_config"`
 	Enabled      bool   `json:"enabled"`
+	Tag          string `json:"tag"`
 }
 
 type nodeDTO struct {
@@ -284,6 +290,7 @@ type nodeDTO struct {
 	ParsedConfig string    `json:"parsed_config"`
 	ClashConfig  string    `json:"clash_config"`
 	Enabled      bool      `json:"enabled"`
+	Tag          string    `json:"tag"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -297,6 +304,7 @@ func convertNode(node storage.Node) nodeDTO {
 		ParsedConfig: node.ParsedConfig,
 		ClashConfig:  node.ClashConfig,
 		Enabled:      node.Enabled,
+		Tag:          node.Tag,
 		CreatedAt:    node.CreatedAt,
 		UpdatedAt:    node.UpdatedAt,
 	}

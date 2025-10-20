@@ -402,8 +402,8 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
 
       case 'hysteria':
       case 'hysteria2':
-        node.password = password
-        node.auth = password // Hysteria2 使用 auth 字段
+        node.password = password // Hysteria2 使用 password 字段
+        node.auth = password // 内部临时字段，用于传递认证信息
         node.ports = queryParams.mport || port.toString()
         node.obfs = queryParams.obfs
         node['obfs-password'] = queryParams.obfsParam
@@ -414,8 +414,10 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
         node.skipCertVerify = false
         node.up = queryParams.up || queryParams.upmbps
         node.down = queryParams.down || queryParams.downmbps
-        // 默认 client-fingerprint
-        node.fp = queryParams.fp || 'chrome'
+        // 只有在 URL 中明确指定了 fp 参数时才添加 client-fingerprint
+        if (queryParams.fp) {
+          node.fp = queryParams.fp
+        }
         break
 
       case 'tuic':
@@ -501,13 +503,15 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     'name', 'type', 'server', 'port',
     // 原始缩写参数（已转换为标准格式）
     'pbk', 'sid', 'spx', 'fp',
+    // Reality 参数（已转换为 reality-opts）
+    'public-key', 'short-id',
     // 中间状态参数
     'allowInsecure', 'skipCertVerify',
     'sni', // 已转换为 servername
     // 'servername', // 与 server 重复，不需要输出
-    // VLESS 专用：password 等同于 uuid
-    'password', // VLESS 和 Hysteria2 的 password 已处理
-    'auth', // Hysteria2 的 auth 已单独处理
+    'auth', // Hysteria2 内部使用的中间字段，已转换为 password
+    'password', // 认证字段，已在第530-541行根据协议类型单独处理
+    'uuid', // 认证字段，已在第526-528行单独处理
     // 已处理的参数
     'security', // 已转换为 tls 和 reality-opts
     'fingerprint' // 已转换为 client-fingerprint
@@ -523,18 +527,19 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
   // 首先处理标准字段（按 Clash 推荐顺序）
   if (node.uuid) {
     clash.uuid = node.uuid
-  } else if (node.password && node.type !== 'vless' && node.type !== 'hysteria2' && node.type !== 'hysteria') {
-    // VLESS 的 password 就是 uuid，Hysteria2 使用 auth
-    clash.password = node.password
   }
 
-  // Hysteria/Hysteria2 专用字段
-  if (node.type === 'hysteria2' || node.type === 'hysteria') {
-    if (node.auth) {
-      clash.auth = node.auth
-    } else if (node.password) {
-      clash.auth = node.password
+  // 根据协议类型设置认证字段
+  if (node.type === 'vless') {
+    // VLESS 只使用 uuid，不需要 password
+  } else if (node.type === 'hysteria2' || node.type === 'hysteria') {
+    // Hysteria/Hysteria2 使用 password
+    if (node.password) {
+      clash.password = node.password
     }
+  } else if (node.password) {
+    // 其他协议（trojan、ss 等）使用 password
+    clash.password = node.password
   }
 
   // SOCKS5 协议专用字段

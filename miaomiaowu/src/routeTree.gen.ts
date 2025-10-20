@@ -17,6 +17,7 @@ import { Route as RulesRouteImport } from './routes/rules'
 import { Route as ProbeRouteImport } from './routes/probe'
 import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as GeneratorRouteImport } from './routes/generator'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SubscriptionIndexRouteImport } from './routes/subscription.index'
@@ -65,6 +66,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GeneratorRoute = GeneratorRouteImport.update({
+  id: '/generator',
+  path: '/generator',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
@@ -104,6 +110,7 @@ const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/nodes': typeof NodesRouteWithChildren
   '/probe': typeof ProbeRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/nodes': typeof NodesRouteWithChildren
   '/probe': typeof ProbeRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/change-password'
+    | '/generator'
     | '/login'
     | '/nodes'
     | '/probe'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/change-password'
+    | '/generator'
     | '/login'
     | '/probe'
     | '/rules'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/change-password'
+    | '/generator'
     | '/login'
     | '/nodes'
     | '/probe'
@@ -204,6 +216,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  GeneratorRoute: typeof GeneratorRoute
   LoginRoute: typeof LoginRoute
   NodesRoute: typeof NodesRouteWithChildren
   ProbeRoute: typeof ProbeRoute
@@ -270,6 +283,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/generator': {
+      id: '/generator'
+      path: '/generator'
+      fullPath: '/generator'
+      preLoaderRoute: typeof GeneratorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/change-password': {
@@ -365,6 +385,7 @@ const SubscriptionRouteWithChildren = SubscriptionRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  GeneratorRoute: GeneratorRoute,
   LoginRoute: LoginRoute,
   NodesRoute: NodesRouteWithChildren,
   ProbeRoute: ProbeRoute,

@@ -207,6 +207,7 @@ type Node struct {
 	ParsedConfig string
 	ClashConfig  string
 	Enabled      bool
+	Tag          string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -443,16 +444,23 @@ CREATE TABLE IF NOT EXISTS nodes (
     parsed_config TEXT NOT NULL,
     clash_config TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
+    tag TEXT NOT NULL DEFAULT '手动输入',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_nodes_username ON nodes(username);
 CREATE INDEX IF NOT EXISTS idx_nodes_protocol ON nodes(protocol);
 CREATE INDEX IF NOT EXISTS idx_nodes_enabled ON nodes(enabled);
+CREATE INDEX IF NOT EXISTS idx_nodes_tag ON nodes(tag);
 `
 
 	if _, err := r.db.Exec(nodesSchema); err != nil {
 		return fmt.Errorf("migrate nodes: %w", err)
+	}
+
+	// Add tag column to existing nodes table if it doesn't exist
+	if err := r.ensureNodeColumn("tag", "TEXT NOT NULL DEFAULT '手动输入'"); err != nil {
+		return err
 	}
 
 	const subscribeFilesSchema = `
@@ -893,6 +901,38 @@ func (r *TrafficRepository) ensureUserColumn(name, definition string) error {
 	}
 
 	alter := fmt.Sprintf("ALTER TABLE users ADD COLUMN %s %s", name, definition)
+	if _, err := r.db.Exec(alter); err != nil {
+		return fmt.Errorf("add column %s: %w", name, err)
+	}
+
+	return nil
+}
+
+func (r *TrafficRepository) ensureNodeColumn(name, definition string) error {
+	rows, err := r.db.Query(`PRAGMA table_info(nodes)`)
+	if err != nil {
+		return fmt.Errorf("nodes table info: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			colName    string
+			colType    string
+			notNull    int
+			defaultVal sql.NullString
+			pk         int
+		)
+		if err := rows.Scan(&cid, &colName, &colType, &notNull, &defaultVal, &pk); err != nil {
+			return fmt.Errorf("scan table info: %w", err)
+		}
+		if strings.EqualFold(colName, name) {
+			return nil
+		}
+	}
+
+	alter := fmt.Sprintf("ALTER TABLE nodes ADD COLUMN %s %s", name, definition)
 	if _, err := r.db.Exec(alter); err != nil {
 		return fmt.Errorf("add column %s: %w", name, err)
 	}

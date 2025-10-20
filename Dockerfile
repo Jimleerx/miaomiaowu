@@ -21,8 +21,8 @@ FROM golang:1.24-alpine AS backend-builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache git
+# Install build dependencies (gcc and musl-dev needed for CGO)
+RUN apk add --no-cache git gcc musl-dev
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -36,8 +36,8 @@ COPY . .
 # Copy built frontend from previous stage (vite outputs to /app/internal/web/dist)
 COPY --from=frontend-builder /app/internal/web/dist ./internal/web/dist
 
-# Build backend with optimizations
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build backend with optimizations (CGO enabled for SQLite WAL support)
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
     -ldflags="-s -w" \
     -o /app/server \
@@ -48,8 +48,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates for HTTPS requests and libc for CGO-compiled binary
+RUN apk --no-cache add ca-certificates tzdata libc6-compat
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && \
@@ -58,9 +58,12 @@ RUN addgroup -g 1000 appuser && \
 # Copy binary from builder
 COPY --from=backend-builder /app/server /app/server
 
-# Create necessary directories
-RUN mkdir -p /app/subscribes && \
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/data /app/subscribes && \
     chown -R appuser:appuser /app
+
+# Volume for persistent data
+VOLUME ["/app/data", "/app/subscribes"]
 
 # Switch to non-root user
 USER appuser

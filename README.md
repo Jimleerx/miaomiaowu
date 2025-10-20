@@ -447,6 +447,22 @@ rm data/traffic.db
 # 重启程序，将显示初始化页面
 ```
 
+### 5. Docker 启动报错 "out of memory(14)"
+这个错误通常是由于 SQLite WAL 模式需要 CGO 支持。已在最新版本修复：
+- Dockerfile 已启用 CGO 编译
+- 添加了必要的运行时库依赖
+- 建议使用 docker-compose.yml 部署并正确挂载 `/app/data` 和 `/app/subscribes` 卷
+
+如果仍遇到问题：
+```bash
+# 确保数据目录有足够的权限和磁盘空间
+chmod 755 ./data ./subscribes
+
+# 使用 docker-compose 重新构建
+docker-compose build --no-cache
+docker-compose up -d
+```
+
 ## 许可证
 
 MIT License
