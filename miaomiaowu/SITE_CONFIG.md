@@ -12,7 +12,7 @@
 {
   "name": "妙妙屋",
   "description": "妙妙屋 Subscribe WebSite By 2ha.me",
-  "url": "https://miaomiaowu.2ha.me",
+  "url": "https://mmwdemo.2ha.me",
   "favicon": "/images/favicon.ico",
   "previewImage": "/images/preview.png",
   "twitterImage": "/safari-pinned-tab.svg",
@@ -26,7 +26,7 @@
 |------|------|--------|
 | `name` | 网站名称，会显示在浏览器标签、SEO 元数据中 | `"妙妙屋"` |
 | `description` | 网站描述，用于 SEO 和社交媒体分享 | `"妙妙屋 Subscribe WebSite By 2ha.me"` |
-| `url` | 网站的完整 URL | `"https://miaomiaowu.2ha.me"` |
+| `url` | 网站的完整 URL | `"https://mmwdemo.2ha.me"` |
 | `favicon` | 网站图标路径 | `"/images/favicon.ico"` |
 | `previewImage` | Open Graph 预览图片路径 | `"/images/preview.png"` |
 | `twitterImage` | Twitter 卡片图片路径 | `"/safari-pinned-tab.svg"` |
