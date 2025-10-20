@@ -4,6 +4,8 @@
  * 并转换为 Clash 节点格式
  */
 
+import { toast } from "sonner"
+
 // 通用代理节点接口
 export interface ProxyNode {
   name: string
@@ -40,7 +42,7 @@ function base64Decode(str: string): string {
     }
     return decodeURIComponent(escape(atob(base64)))
   } catch (e) {
-    console.error('Base64 decode error:', e)
+    toast(`'Base64 decode error:' ${e instanceof Error ? e.message : String(e)}`)
     return ''
   }
 }
@@ -133,7 +135,7 @@ function parseVmess(url: string): ProxyNode | null {
 
     return node
   } catch (e) {
-    console.error('Parse VMess error:', e)
+    toast(`'Parse VMess error: '${e instanceof Error ? e.message : String(e)}`)
     return null
   }
 }
@@ -199,7 +201,7 @@ function parseShadowsocks(url: string): ProxyNode | null {
       password
     }
   } catch (e) {
-    console.error('Parse Shadowsocks error:', e)
+    toast(`'Parse Shadowsocks error:' ${e instanceof Error ? e.message : String(e)}`)
     return null
   }
 }
@@ -236,7 +238,7 @@ function parseSocks(url: string): ProxyNode | null {
       password
     }
   } catch (e) {
-    console.error('Parse SOCKS error:', e)
+    toast(`'Parse SOCKS error:' ${e instanceof Error ? e.message : String(e)}`)
     return null
   }
 }
@@ -433,7 +435,7 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
 
     return node
   } catch (e) {
-    console.error(`Parse ${protocol} error:`, e)
+    toast(`Parse ${protocol} error: ${e instanceof Error ? e.message : String(e)}`)
     return null
   }
 }
