@@ -74,13 +74,23 @@ mkdir "%BUILD_DIR%\subscribes" 2>nul
 
 REM 复制 Windows 版本到 release 目录
 copy "%BUILD_DIR%\traffic-info-windows-amd64.exe" "%OUTPUT_DIR%\windows\" >nul
-xcopy "data" "%OUTPUT_DIR%\windows\data\" /E /I /Y >nul 2>&1
-xcopy "subscribes" "%OUTPUT_DIR%\windows\subscribes\" /E /I /Y >nul 2>&1
-xcopy "config" "%OUTPUT_DIR%\windows\config\" /E /I /Y >nul 2>&1
+if exist "data" (
+    xcopy "data" "%OUTPUT_DIR%\windows\data\" /E /I /Y >nul 2>&1
+)
+if exist "subscribes" (
+    xcopy "subscribes" "%OUTPUT_DIR%\windows\subscribes\" /E /I /Y >nul 2>&1
+)
+if exist "config" (
+    xcopy "config" "%OUTPUT_DIR%\windows\config\" /E /I /Y >nul 2>&1
+)
 
 REM 复制必要的配置文件到 build 根目录
-xcopy "data" "%BUILD_DIR%\data\" /E /I /Y >nul 2>&1
-xcopy "subscribes" "%BUILD_DIR%\subscribes\" /E /I /Y >nul 2>&1
+if exist "data" (
+    xcopy "data" "%BUILD_DIR%\data\" /E /I /Y >nul 2>&1
+)
+if exist "subscribes" (
+    xcopy "subscribes" "%BUILD_DIR%\subscribes\" /E /I /Y >nul 2>&1
+)
 
 echo.
 echo ========================================

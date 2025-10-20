@@ -37,8 +37,8 @@ api.interceptors.response.use(
     if (error instanceof AxiosError) {
       if (error.response?.status === 401) {
         useAuthStore.getState().auth.reset()
-        if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-          window.location.href = '/'
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login'
         }
       }
     }

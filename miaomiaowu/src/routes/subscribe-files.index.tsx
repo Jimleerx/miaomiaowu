@@ -22,7 +22,7 @@ export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
     const token = useAuthStore.getState().auth.accessToken
     if (!token) {
-      throw redirect({ to: '/' })
+      throw redirect({ to: '/login' })
     }
   },
   component: SubscribeFilesPage,
@@ -228,7 +228,7 @@ function SubscribeFilesPage() {
   const handleEdit = (file: SubscribeFile) => {
     setEditingFile(file)
     setEditDialogOpen(true)
-    setEditorValue('')
+    // 不要立即清空 editorValue，等待 useEffect 从 fileContentQuery 加载数据
     setIsDirty(false)
     setValidationError(null)
   }
@@ -513,17 +513,26 @@ function SubscribeFilesPage() {
       </section>
 
       {/* 编辑文件 Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className='max-w-4xl max-h-[90vh]'>
-          <DialogHeader>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open)
+        if (!open) {
+          // 关闭对话框时清理状态
+          setEditingFile(null)
+          setEditorValue('')
+          setIsDirty(false)
+          setValidationError(null)
+        }
+      }}>
+        <DialogContent className='max-w-4xl h-[90vh] flex flex-col p-0'>
+          <DialogHeader className='px-6 pt-6'>
             <DialogTitle>{editingFile?.name || '编辑文件'}</DialogTitle>
             <DialogDescription>
               编辑 {editingFile?.filename} 的内容，会自动验证 YAML 格式
             </DialogDescription>
           </DialogHeader>
 
-          <div className='space-y-4 py-4'>
-            <div className='flex items-center gap-3'>
+          <div className='flex-1 flex flex-col overflow-hidden px-6'>
+            <div className='flex items-center gap-3 py-4'>
               <Button
                 size='sm'
                 onClick={handleSave}
@@ -545,12 +554,12 @@ function SubscribeFilesPage() {
             </div>
 
             {validationError ? (
-              <div className='rounded-md border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive'>
+              <div className='rounded-md border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive mb-4'>
                 {validationError}
               </div>
             ) : null}
 
-            <div className='rounded-lg border bg-muted/20 overflow-hidden'>
+            <div className='flex-1 rounded-lg border bg-muted/20 overflow-hidden mb-4'>
               {fileContentQuery.isLoading ? (
                 <div className='p-4 text-center text-muted-foreground'>加载中...</div>
               ) : (
@@ -564,7 +573,7 @@ function SubscribeFilesPage() {
                       setValidationError(null)
                     }
                   }}
-                  className='min-h-[500px] max-h-[500px] font-mono text-sm resize-none overflow-y-auto'
+                  className='w-full h-full font-mono text-sm resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0'
                   disabled={!editingFile || saveMutation.isPending}
                   spellCheck={false}
                 />
@@ -572,7 +581,7 @@ function SubscribeFilesPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className='px-6 pb-6'>
             <Button variant='outline' onClick={() => setEditDialogOpen(false)}>
               关闭
             </Button>

@@ -52,7 +52,7 @@
   input,
   textarea,
   [contenteditable='true'] {
-    caret-color: inherit;
+    caret-color: currentColor !important;
   }
 
   code,
