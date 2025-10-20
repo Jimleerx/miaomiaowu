@@ -6,7 +6,7 @@
 set -e
 
 # 配置
-VERSION="v0.0.6"
+VERSION="v0.0.7"
 GITHUB_REPO="Jimleerx/miaomiaowu"
 BINARY_NAME="traffic-info-linux-amd64"
 INSTALL_DIR="/usr/local/bin"
@@ -158,31 +158,107 @@ show_status() {
     echo "  重启服务: systemctl restart $SERVICE_NAME"
     echo "  查看状态: systemctl status $SERVICE_NAME"
     echo "  查看日志: journalctl -u $SERVICE_NAME -f"
+    echo "  更新版本: curl -sL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sudo bash -s update"
     echo ""
     echo "⚠️  首次访问需要完成初始化配置"
     echo ""
 }
 
-# 主函数
-main() {
-    echo_info "开始安装妙妙屋流量监控系统..."
+# 更新服务
+update_service() {
+    echo_info "开始更新妙妙屋..."
     echo ""
 
-    check_root
-    check_architecture
-    install_dependencies
+    # 检查服务是否已安装
+    if [ ! -f "$INSTALL_DIR/$SERVICE_NAME" ]; then
+        echo_error "未检测到已安装的服务，请先使用安装模式"
+        exit 1
+    fi
+
+    # 显示当前版本
+    if [ -f "$DATA_DIR/.version" ]; then
+        CURRENT_VERSION=$(cat "$DATA_DIR/.version")
+        echo_info "当前版本: $CURRENT_VERSION"
+    fi
+    echo_info "目标版本: $VERSION"
+    echo ""
+
+    # 停止服务
+    echo_info "停止服务..."
+    systemctl stop ${SERVICE_NAME}.service || true
+
+    # 备份当前二进制文件
+    if [ -f "$INSTALL_DIR/$SERVICE_NAME" ]; then
+        echo_info "备份当前版本..."
+        cp "$INSTALL_DIR/$SERVICE_NAME" "$INSTALL_DIR/${SERVICE_NAME}.bak"
+    fi
+
+    # 下载并安装新版本
     download_binary
     install_binary
-    create_directories
-    create_systemd_service
 
+    # 保存版本信息
+    echo "$VERSION" > "$DATA_DIR/.version"
+
+    # 重新加载 systemd 配置
+    systemctl daemon-reload
+
+    # 启动服务
     if start_service; then
-        show_status
+        echo ""
+        echo "======================================"
+        echo_info "更新完成！"
+        echo "======================================"
+        echo ""
+        echo "📦 版本: $VERSION"
+        echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):8080"
+        echo ""
+        echo "如遇问题可回滚到备份版本:"
+        echo "  sudo systemctl stop $SERVICE_NAME"
+        echo "  sudo mv $INSTALL_DIR/${SERVICE_NAME}.bak $INSTALL_DIR/$SERVICE_NAME"
+        echo "  sudo systemctl start $SERVICE_NAME"
+        echo ""
     else
-        echo_error "安装过程中出现错误，请查看日志: journalctl -u $SERVICE_NAME -n 50"
+        echo_error "更新后服务启动失败，正在回滚..."
+        mv "$INSTALL_DIR/${SERVICE_NAME}.bak" "$INSTALL_DIR/$SERVICE_NAME"
+        systemctl start ${SERVICE_NAME}.service
+        echo_error "已回滚到之前版本，请查看日志: journalctl -u $SERVICE_NAME -n 50"
         exit 1
     fi
 }
 
+# 主函数
+main() {
+    # 检查命令行参数
+    if [ "$1" = "update" ]; then
+        echo_info "进入更新模式..."
+        check_root
+        check_architecture
+        install_dependencies
+        update_service
+    else
+        echo_info "开始安装妙妙屋流量监控系统..."
+        echo ""
+
+        check_root
+        check_architecture
+        install_dependencies
+        download_binary
+        install_binary
+        create_directories
+        create_systemd_service
+
+        # 保存版本信息
+        echo "$VERSION" > "$DATA_DIR/.version"
+
+        if start_service; then
+            show_status
+        else
+            echo_error "安装过程中出现错误，请查看日志: journalctl -u $SERVICE_NAME -n 50"
+            exit 1
+        fi
+    fi
+}
+
 # 运行主函数
-main
+main "$@"

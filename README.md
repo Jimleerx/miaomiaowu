@@ -9,16 +9,19 @@
 - 📈 **历史数据展示** - 30 天流量使用趋势图表
 - 🔗 **订阅链接管理** - 一键生成 Clash 订阅链接
 - 🎯 **智能规则配置** - 可视化订阅规则编辑器
+- 📦 **节点管理** - 支持添加、编辑、删除代理节点
+- 🔧 **订阅生成器** - 自定义规则或使用模板快速生成订阅
+- 🎨 **手动分组** - 拖拽式代理节点分组管理
 - 👥 **用户权限管理** - 管理员/普通用户角色区分
 - 🌓 **主题切换** - 支持亮色/暗色模式
+- 📱 **响应式设计** - 完美适配移动端和桌面端
 
 ### 探针支持
 - [Nezha](https://github.com/naiba/nezha) 面板
 - [DStatus](https://github.com/DokiDoki1103/dstatus) 监控
 - [Komari](https://github.com/missuo/komari) 面板
-
-### 体验demo
 [Demo](https://demo.miaomiaowu.com)  
+### 体验demo
 账户/密码: test / test123
 
 
@@ -108,6 +111,7 @@ docker-compose down
 
 **重要提示**：请确保定期备份这两个目录的数据。
 
+
 ### 方式 2：一键安装（Linux）
 
 **自动安装为 systemd 服务（Debian/Ubuntu）：**
@@ -118,6 +122,12 @@ curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh |
 
 安装完成后，服务将自动启动，访问 `http://服务器IP:8080` 即可。
 
+**更新到最新版本：**
+```bash
+# systemd 服务更新
+curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh | sudo bash -s update
+```
+
 **简易安装（手动运行）：**
 ```bash
 # 一键下载安装
@@ -127,6 +137,11 @@ curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-instal
 ./traffic-info
 ```
 
+**更新简易安装版本：**
+```bash
+# 更新到最新版本
+curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh | bash -s update
+```
 ### 方式 3：二进制文件部署
 
 **Linux：**
@@ -154,6 +169,9 @@ chmod +x traffic-info-linux-amd64
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_url.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/probe_datasource.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/subscribe_manage.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/generate_subscribe.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/custom_proxy_group.png)  
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/node_manage.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/user_manage.png)
 ### 技术特点
 - 🚀 单二进制文件部署，无需外部依赖
@@ -477,6 +495,23 @@ MIT License
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
 
 ## 更新日志
+### v0.0.7 (2025-10-21)
+- 🎨 新增手动分组功能，支持拖拽式节点分组
+- 📦 新增节点管理功能
+- 🔧 新增订阅生成器（支持自定义规则和模板）
+- 📱 优化移动端响应式布局
+- 🚀 前端依赖清理，减小打包体积
+- ⭐ 一键安装脚本支持更新
+
+### v0.0.6 (2025-10-20)
+- 🎨 支持导入外部clash订阅与上传yaml文件
+- 🐛 修复若干 UI 显示问题
+
+### v0.0.5 (2025-10-18)
+- 🔐 增强安全性，添加管理员权限控制
+- 🎯 优化规则选择器UI
+- 📝 改进自定义规则编辑器
+- 🐛 修复数据库连接问题
 
 ### v0.0.1 (2025-10-15)
 - 初始版本发布
