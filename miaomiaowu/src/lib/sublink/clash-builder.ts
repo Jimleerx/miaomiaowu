@@ -1,4 +1,4 @@
-import type { ProxyConfig, ClashProxy, CustomRule, KanbanObject } from './types'
+import type { ProxyConfig, CustomRule } from './types'
 import { deepCopy } from './utils'
 import { DEFAULT_CLASH_CONFIG, CLASH_SITE_RULE_SET_BASE_URL, CLASH_IP_RULE_SET_BASE_URL } from './clash-config'
 import { RULE_CATEGORIES } from './predefined-rules'
