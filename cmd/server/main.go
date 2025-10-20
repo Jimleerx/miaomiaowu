@@ -15,6 +15,7 @@ import (
 	"traffic-info/internal/handler"
 	"traffic-info/internal/storage"
 	"traffic-info/internal/web"
+	ruletemplates "traffic-info/rule_templates"
 	"traffic-info/subscribes"
 )
 
@@ -56,6 +57,11 @@ func main() {
 	subscribeDir := filepath.Join("subscribes")
 	if err := subscribes.Ensure(subscribeDir); err != nil {
 		log.Fatalf("failed to prepare subscription files: %v", err)
+	}
+
+	ruleTemplatesDir := filepath.Join("rule_templates")
+	if err := ruletemplates.Ensure(ruleTemplatesDir); err != nil {
+		log.Fatalf("failed to prepare rule template files: %v", err)
 	}
 
 	ensureDefaultSubscriptions(repo)

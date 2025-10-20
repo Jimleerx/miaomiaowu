@@ -39,13 +39,15 @@ docker run -d \
   -p 8080:8080 \
   -v ./traffic-info-data:/app/data \
   -v ./subscribes:/app/subscribes \
+  -v ./rule_templates:/app/rule_templates \
   ghcr.io/jimleerx/miaomiaowu:latest
 ```
 
 说明：
 - `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
 - `-v ./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
-- `-v ./subscribes:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `-v ./subscribes:/app/subscribes` 订阅文件存放目录
+- `-v ./rule_templates:/app/rule_templates` 规则模板存放目录
 - `-e JWT_SECRET=your-secret` 可选参数，配置token密钥，建议改成随机字符串
 - 其他环境变量（如 `LOG_LEVEL`）同下文“环境变量”章节，可通过 `-e` 继续添加。
 
@@ -72,6 +74,7 @@ services:
     volumes:
       - ./traffic-info-data:/app/data
       - ./subscribes:/app/subscribes
+      - ./rule_templates:/app/rule_templates
     environment:
       - JWT_SECRET=your-custom-secret-key
       - LOG_LEVEL=info
@@ -107,7 +110,8 @@ docker-compose down
 容器使用两个数据卷进行数据持久化：
 
 - `/app/data` - 存储 SQLite 数据库文件
-- `/app/subscribes` - 存储订阅规则配置文件
+- `/app/subscribes` - 存储订阅配置文件
+- `/app/rule_templates` - 存储规则文件模板
 
 **重要提示**：请确保定期备份这两个目录的数据。
 
