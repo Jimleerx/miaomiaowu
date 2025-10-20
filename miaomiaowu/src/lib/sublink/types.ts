@@ -1,4 +1,16 @@
 // Type definitions for sublink-worker
+export interface KanbanObject { 
+  id: string
+  name: string
+  features: KanbanFeatrure[]
+}
+
+export interface KanbanFeatrure { 
+  name: string
+  id: string
+  pid: string
+}
+
 
 export interface ProxyConfig {
   tag?: string

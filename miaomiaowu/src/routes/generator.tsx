@@ -38,8 +38,9 @@ import { toast } from 'sonner'
 import { ClashConfigBuilder } from '@/lib/sublink/clash-builder'
 import { CustomRulesEditor } from '@/components/custom-rules-editor'
 import { RuleSelector } from '@/components/rule-selector'
-import type { PredefinedRuleSetType, CustomRule } from '@/lib/sublink/types'
+import type { PredefinedRuleSetType, CustomRule, KanbanObject } from '@/lib/sublink/types'
 import type { ProxyConfig } from '@/lib/sublink/types'
+import { CATEGORY_TO_RULE_NAME, translateOutbound } from '@/lib/sublink/translations'
 
 type SavedNode = {
   id: number
@@ -119,6 +120,123 @@ function SubscriptionGeneratorPage() {
       setSelectedNodeIds(new Set(filteredNodes.map(n => n.id)))
     }
   }
+
+  const handleGetProxyGroups = (): Array<KanbanObject> => {
+    if (selectedNodeIds.size === 0) {
+      toast.error('请选择至少一个节点')
+      return []
+    }
+    const groups: any[] = []
+
+    setLoading(true)
+    try {
+      // 获取选中的节点并转换为ProxyConfig
+      const selectedNodes = savedNodes.filter(n => selectedNodeIds.has(n.id))
+      const proxies: ProxyConfig[] = selectedNodes.map(node => {
+        try {
+          return JSON.parse(node.clash_config) as ProxyConfig
+        } catch (e) {
+          console.error('Failed to parse clash config for node:', node.node_name, e)
+          return null
+        }
+      }).filter((p): p is ProxyConfig => p !== null)
+
+      if (proxies.length === 0) {
+        toast.error('未能解析到任何有效节点')
+        return []
+      }
+
+      toast.success(`成功加载 ${proxies.length} 个节点`)
+
+      // Validate custom rules
+      const validCustomRules = customRules.filter((rule) => rule.name.trim() !== '')
+      if (validCustomRules.length > 0) {
+        toast.info(`应用 ${validCustomRules.length} 条自定义规则`)
+      }
+
+      // All rule sets now use selected categories
+      if (selectedCategories.length > 0) {
+        toast.info(`应用 ${selectedCategories.length} 个规则类别`)
+      }
+
+      // Build Clash config using new builder
+      const proxyNames = proxies.map((p) => p.name)
+
+      // 1. Node Select group
+      groups.push({
+        name: translateOutbound('Node Select'),
+        type: 'select',
+        proxies: ['DIRECT', 'REJECT', translateOutbound('Auto Select'), ...proxyNames],
+      })
+
+      // 2. Auto Select group
+      groups.push({
+        name: translateOutbound('Auto Select'),
+        type: 'url-test',
+        proxies: proxyNames,
+        url: 'https://www.gstatic.com/generate_204',
+        interval: 300,
+        lazy: false,
+      })
+
+      // 3. Category-specific groups
+      for (const categoryName of selectedCategories) {
+        const ruleName = CATEGORY_TO_RULE_NAME[categoryName]
+        if (!ruleName) continue
+
+        groups.push({
+          name: translateOutbound(ruleName),
+          type: 'select',
+          proxies: [
+            translateOutbound('Node Select'),
+            'DIRECT',
+            'REJECT',
+            translateOutbound('Auto Select'),
+            ...proxyNames,
+          ],
+        })
+      }
+
+      // 4. Custom rule groups
+      for (const rule of validCustomRules) {
+        if (!rule.name) continue
+
+        groups.push({
+          name: translateOutbound(rule.name),
+          type: 'select',
+          proxies: [
+            translateOutbound('Node Select'),
+            'DIRECT',
+            'REJECT',
+            translateOutbound('Auto Select'),
+            ...proxyNames,
+          ],
+        })
+      }
+
+      // 5. Fall Back group
+      groups.push({
+        name: translateOutbound('Fall Back'),
+        type: 'select',
+        proxies: [
+          translateOutbound('Node Select'),
+          'DIRECT',
+          'REJECT',
+          translateOutbound('Auto Select'),
+          ...proxyNames,
+        ],
+      })
+
+      toast.success('Clash 配置生成成功！')
+    } catch (error) {
+      console.error('Generation error:', error)
+      toast.error('生成订阅链接失败')
+    } finally {
+      setLoading(false)
+    }
+    return groups
+  }
+
 
   const handleGenerate = async () => {
     if (selectedNodeIds.size === 0) {
