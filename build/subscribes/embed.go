@@ -34,6 +34,12 @@ func Ensure(targetDir string) error {
 		}
 
 		name := entry.Name()
+
+		// Skip the .keep.yaml placeholder file
+		if name == ".keep.yaml" {
+			continue
+		}
+
 		destination := filepath.Join(targetDir, name)
 
 		if _, err := os.Stat(destination); err == nil {
