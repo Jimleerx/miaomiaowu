@@ -451,7 +451,6 @@ CREATE TABLE IF NOT EXISTS nodes (
 CREATE INDEX IF NOT EXISTS idx_nodes_username ON nodes(username);
 CREATE INDEX IF NOT EXISTS idx_nodes_protocol ON nodes(protocol);
 CREATE INDEX IF NOT EXISTS idx_nodes_enabled ON nodes(enabled);
-CREATE INDEX IF NOT EXISTS idx_nodes_tag ON nodes(tag);
 `
 
 	if _, err := r.db.Exec(nodesSchema); err != nil {
@@ -461,6 +460,11 @@ CREATE INDEX IF NOT EXISTS idx_nodes_tag ON nodes(tag);
 	// Add tag column to existing nodes table if it doesn't exist
 	if err := r.ensureNodeColumn("tag", "TEXT NOT NULL DEFAULT '手动输入'"); err != nil {
 		return err
+	}
+
+	// Create tag index after ensuring column exists
+	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_nodes_tag ON nodes(tag);`); err != nil {
+		return fmt.Errorf("create tag index: %w", err)
 	}
 
 	const subscribeFilesSchema = `
