@@ -168,6 +168,7 @@ var (
 
 const (
 	ProbeTypeNezha   = "nezha"
+	ProbeTypeNezhaV0 = "nezhav0"
 	ProbeTypeDstatus = "dstatus"
 	ProbeTypeKomari  = "komari"
 
@@ -227,6 +228,7 @@ type SubscribeFile struct {
 var (
 	allowedProbeTypes = map[string]struct{}{
 		ProbeTypeNezha:   {},
+		ProbeTypeNezhaV0: {},
 		ProbeTypeDstatus: {},
 		ProbeTypeKomari:  {},
 	}
@@ -396,10 +398,15 @@ CREATE TABLE IF NOT EXISTS subscription_links (
 		return fmt.Errorf("migrate subscription_links: %w", err)
 	}
 
+	// Migrate existing probe_configs table to add nezhav0 support BEFORE creating with IF NOT EXISTS
+	if err := r.migrateProbeConfigsForNezhaV0(); err != nil {
+		return fmt.Errorf("migrate probe_configs for nezhav0: %w", err)
+	}
+
 	const probeConfigSchema = `
 CREATE TABLE IF NOT EXISTS probe_configs (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    probe_type TEXT NOT NULL CHECK (probe_type IN ('nezha','dstatus','komari')),
+    probe_type TEXT NOT NULL CHECK (probe_type IN ('nezha','nezhav0','dstatus','komari')),
     address TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -877,6 +884,80 @@ func (r *TrafficRepository) UpsertProbeConfig(ctx context.Context, cfg ProbeConf
 func (r *TrafficRepository) ensureDefaultProbeConfig() error {
 	// No longer creating default probe configuration
 	// Users must configure probe settings via the web interface
+	return nil
+}
+
+func (r *TrafficRepository) migrateProbeConfigsForNezhaV0() error {
+	// Check if table exists first
+	rows, err := r.db.Query(`SELECT sql FROM sqlite_master WHERE type='table' AND name='probe_configs'`)
+	if err != nil {
+		return fmt.Errorf("query schema: %w", err)
+	}
+	defer rows.Close()
+
+	var schemaSql string
+	if rows.Next() {
+		if err := rows.Scan(&schemaSql); err != nil {
+			return fmt.Errorf("scan schema: %w", err)
+		}
+	} else {
+		// Table doesn't exist yet, no migration needed
+		return nil
+	}
+	rows.Close()
+
+	// If schema already contains nezhav0, no migration needed
+	if strings.Contains(schemaSql, "nezhav0") {
+		return nil
+	}
+
+	// If old schema doesn't contain probe_type check, also skip (brand new table will be created correctly)
+	if !strings.Contains(schemaSql, "probe_type") {
+		return nil
+	}
+
+	// Need to migrate: recreate table with new CHECK constraint
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create new table with updated schema
+	_, err = tx.Exec(`
+CREATE TABLE probe_configs_new (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    probe_type TEXT NOT NULL CHECK (probe_type IN ('nezha','nezhav0','dstatus','komari')),
+    address TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`)
+	if err != nil {
+		return fmt.Errorf("create new table: %w", err)
+	}
+
+	// Copy data from old table
+	_, err = tx.Exec(`INSERT INTO probe_configs_new SELECT * FROM probe_configs`)
+	if err != nil {
+		return fmt.Errorf("copy data: %w", err)
+	}
+
+	// Drop old table
+	_, err = tx.Exec(`DROP TABLE probe_configs`)
+	if err != nil {
+		return fmt.Errorf("drop old table: %w", err)
+	}
+
+	// Rename new table
+	_, err = tx.Exec(`ALTER TABLE probe_configs_new RENAME TO probe_configs`)
+	if err != nil {
+		return fmt.Errorf("rename table: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
 	return nil
 }
 

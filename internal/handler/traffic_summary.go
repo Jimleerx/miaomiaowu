@@ -169,6 +169,8 @@ func (h *TrafficSummaryHandler) fetchTotals(ctx context.Context) (int64, int64, 
 	switch cfg.ProbeType {
 	case storage.ProbeTypeNezha:
 		return h.fetchNezhaTotals(ctx, cfg)
+	case storage.ProbeTypeNezhaV0:
+		return h.fetchNezhaV0Totals(ctx, cfg)
 	case storage.ProbeTypeDstatus:
 		return h.fetchBatchSummary(ctx, cfg.Address, serverIDs)
 	case storage.ProbeTypeKomari:
@@ -322,6 +324,137 @@ func (h *TrafficSummaryHandler) fetchNezhaTotals(ctx context.Context, cfg storag
 			used = wsEntry.NetIn
 		default:
 			used = wsEntry.NetIn + wsEntry.NetOut
+		}
+
+		if used < 0 {
+			used = 0
+		}
+		if srv.MonthlyTrafficBytes > 0 && used > srv.MonthlyTrafficBytes {
+			used = srv.MonthlyTrafficBytes
+		}
+
+		totalUsed += used
+	}
+
+	totalRemaining := totalLimit - totalUsed
+	if totalRemaining < 0 {
+		totalRemaining = 0
+	}
+
+	return totalLimit, totalRemaining, totalUsed, nil
+}
+
+func (h *TrafficSummaryHandler) fetchNezhaV0Totals(ctx context.Context, cfg storage.ProbeConfig) (int64, int64, int64, error) {
+	baseAddress := strings.TrimSpace(cfg.Address)
+	if baseAddress == "" {
+		return 0, 0, 0, errors.New("invalid probe address")
+	}
+
+	base, err := url.Parse(baseAddress)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid probe address: %w", err)
+	}
+
+	endpoint := &url.URL{Path: "/api/server"}
+	target := base.ResolveReference(endpoint)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("nezha v0 request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, 0, fmt.Errorf("nezha v0 request failed with status %s", resp.Status)
+	}
+
+	type nezhaV0Server struct {
+		ID     json.Number `json:"id"`
+		Status struct {
+			NetInTransfer  json.Number `json:"NetInTransfer"`
+			NetOutTransfer json.Number `json:"NetOutTransfer"`
+		} `json:"status"`
+	}
+
+	type nezhaV0Response struct {
+		Result []nezhaV0Server `json:"result"`
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	decoder.UseNumber()
+
+	var payload nezhaV0Response
+	if err := decoder.Decode(&payload); err != nil {
+		return 0, 0, 0, fmt.Errorf("parse nezha v0 response: %w", err)
+	}
+
+	observed := make(map[string]struct {
+		NetIn  int64
+		NetOut int64
+	})
+	for _, entry := range payload.Result {
+		var id string
+		if v, err := entry.ID.Int64(); err == nil {
+			id = strconv.FormatInt(v, 10)
+		} else {
+			raw := strings.TrimSpace(entry.ID.String())
+			if raw != "" {
+				if strings.ContainsAny(raw, ".eE") {
+					if f, err := entry.ID.Float64(); err == nil {
+						id = strconv.FormatInt(int64(math.Round(f)), 10)
+					} else {
+						id = raw
+					}
+				} else {
+					id = raw
+				}
+			} else if f, err := entry.ID.Float64(); err == nil {
+				id = strconv.FormatInt(int64(math.Round(f)), 10)
+			}
+		}
+
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+
+		netIn := jsonNumberToInt64(entry.Status.NetInTransfer)
+		netOut := jsonNumberToInt64(entry.Status.NetOutTransfer)
+		observed[id] = struct {
+			NetIn  int64
+			NetOut int64
+		}{NetIn: netIn, NetOut: netOut}
+	}
+
+	var totalLimit int64
+	var totalUsed int64
+
+	for _, srv := range cfg.Servers {
+		id := strings.TrimSpace(srv.ServerID)
+		if id == "" {
+			continue
+		}
+
+		totalLimit += srv.MonthlyTrafficBytes
+
+		entry, ok := observed[id]
+		if !ok {
+			continue
+		}
+
+		var used int64
+		switch strings.ToLower(strings.TrimSpace(srv.TrafficMethod)) {
+		case storage.TrafficMethodUp:
+			used = entry.NetOut
+		case storage.TrafficMethodDown:
+			used = entry.NetIn
+		default:
+			used = entry.NetIn + entry.NetOut
 		}
 
 		if used < 0 {

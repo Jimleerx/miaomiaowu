@@ -75,6 +75,8 @@ func (h *probeSyncHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch probeType {
 	case storage.ProbeTypeNezha:
 		servers, err = h.fetchNezhaServers(r.Context(), address)
+	case storage.ProbeTypeNezhaV0:
+		servers, err = h.fetchNezhaV0Servers(r.Context(), address)
 	case storage.ProbeTypeDstatus:
 		servers, err = h.fetchDstatusServers(r.Context(), address)
 	case storage.ProbeTypeKomari:
@@ -334,6 +336,87 @@ func (h *probeSyncHandler) fetchDstatusServers(ctx context.Context, address stri
 			Name:             name,
 			TrafficMethod:    "both",
 			MonthlyTrafficGB: monthlyGB,
+		})
+	}
+
+	return servers, nil
+}
+
+func (h *probeSyncHandler) fetchNezhaV0Servers(ctx context.Context, address string) ([]probeSyncServer, error) {
+	base, err := url.Parse(strings.TrimSpace(address))
+	if err != nil {
+		return nil, fmt.Errorf("invalid probe address: %w", err)
+	}
+
+	endpoint := &url.URL{Path: "/api/server"}
+	target := base.ResolveReference(endpoint)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("服务器接口返回异常: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("服务器接口返回异常")
+	}
+
+	var serverResp struct {
+		Result []struct {
+			ID   json.Number `json:"id"`
+			Name string      `json:"name"`
+		} `json:"result"`
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	decoder.UseNumber()
+
+	if err := decoder.Decode(&serverResp); err != nil {
+		return nil, fmt.Errorf("parse server response: %w", err)
+	}
+
+	if len(serverResp.Result) == 0 {
+		return nil, errors.New("未从面板获取到服务器列表")
+	}
+
+	servers := make([]probeSyncServer, 0, len(serverResp.Result))
+	for i, item := range serverResp.Result {
+		var id string
+		if v, err := item.ID.Int64(); err == nil {
+			id = strconv.FormatInt(v, 10)
+		} else {
+			raw := strings.TrimSpace(item.ID.String())
+			if raw != "" {
+				if strings.ContainsAny(raw, ".eE") {
+					if f, err := item.ID.Float64(); err == nil {
+						id = strconv.FormatInt(int64(math.Round(f)), 10)
+					} else {
+						id = raw
+					}
+				} else {
+					id = raw
+				}
+			} else if f, err := item.ID.Float64(); err == nil {
+				id = strconv.FormatInt(int64(math.Round(f)), 10)
+			}
+		}
+
+		id = strings.TrimSpace(id)
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = fmt.Sprintf("服务器 %d", i+1)
+		}
+
+		servers = append(servers, probeSyncServer{
+			ServerID:         id,
+			Name:             name,
+			TrafficMethod:    "both",
+			MonthlyTrafficGB: 0,
 		})
 	}
 

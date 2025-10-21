@@ -214,6 +214,7 @@ func formatServerError(idx int, message string) string {
 func getAllowedProbeTypes() map[string]struct{} {
 	return map[string]struct{}{
 		storage.ProbeTypeNezha:   {},
+		storage.ProbeTypeNezhaV0: {},
 		storage.ProbeTypeDstatus: {},
 		storage.ProbeTypeKomari:  {},
 	}

@@ -63,6 +63,7 @@ type ProbeConfigResponse = {
 
 const PROBE_TYPES = [
   { value: 'nezha', label: '哪吒面板' },
+  { value: 'nezhav0', label: '哪吒 V0' },
   { value: 'dstatus', label: 'DStatus' },
   { value: 'komari', label: 'Komari' },
 ]
@@ -304,6 +305,22 @@ function ProbeManagePage() {
     }))
   }
 
+  const fetchNezhaV0Servers = async (baseURL: string): Promise<ServerForm[]> => {
+    const response = await api.post('/api/admin/probe-sync', {
+      probe_type: 'nezhav0',
+      address: baseURL,
+    })
+
+    const servers: Array<any> = response.data?.servers ?? []
+    return servers.map((server, index) => ({
+      key: `${server.server_id || 'server'}-${index}-${generateKey()}`,
+      server_id: server.server_id ?? '',
+      name: server.name ?? `服务器 ${index + 1}`,
+      traffic_method: server.traffic_method ?? 'both',
+      monthly_traffic_gb: 0,
+    }))
+  }
+
   const handleSyncServers = async () => {
     if (!formState.address.trim()) {
       toast.error('请先填写探针面板地址')
@@ -319,6 +336,8 @@ function ProbeManagePage() {
         mapped = await fetchDstatusServers(baseURL)
       } else if (formState.probeType === 'nezha') {
         mapped = await fetchNezhaServers(baseURL)
+      } else if (formState.probeType === 'nezhav0') {
+        mapped = await fetchNezhaV0Servers(baseURL)
       } else if (formState.probeType === 'komari') {
         mapped = await fetchKomariServers(baseURL)
       } else {
@@ -505,7 +524,7 @@ function ProbeManagePage() {
                 <p className='mt-2 text-sm font-semibold text-destructive'>请为每个服务器填写月流量（GB），该字段为必填项。</p>
               </div>
               <div className='flex flex-wrap gap-2'>
-                {['dstatus', 'nezha', 'komari'].includes(formState.probeType) ? (
+                {['dstatus', 'nezha', 'nezhav0', 'komari'].includes(formState.probeType) ? (
                   <Button
                     type='button'
                     variant='secondary'
