@@ -91,9 +91,15 @@ create_directories() {
 # 创建 systemd 服务
 create_systemd_service() {
     echo_info "创建 systemd 服务..."
+
+    # 询问端口号
+    echo ""
+    read -p "请输入端口（默认8080）: " PORT_INPUT
+    PORT_INPUT=${PORT_INPUT:-8080}
+
     cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
-Description=Traffic Info - 妙妙屋流量监控系统
+Description=Traffic Info - 妙妙屋个人订阅管理系统
 After=network.target
 Wants=network-online.target
 
@@ -109,7 +115,7 @@ StandardError=journal
 SyslogIdentifier=$SERVICE_NAME
 
 # 环境变量
-Environment="PORT=8080"
+Environment="PORT=$PORT_INPUT"
 Environment="DATABASE_PATH=$DATA_DIR/traffic.db"
 Environment="LOG_LEVEL=info"
 
@@ -122,7 +128,7 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    echo_info "systemd 服务已创建"
+    echo_info "systemd 服务已创建（端口: $PORT_INPUT）"
 }
 
 # 启动服务
@@ -143,6 +149,10 @@ start_service() {
 
 # 显示状态
 show_status() {
+    # 从 systemd 服务文件中读取端口号
+    CONFIGURED_PORT=$(grep "Environment=\"PORT=" /etc/systemd/system/${SERVICE_NAME}.service | sed 's/.*PORT=\([0-9]*\).*/\1/')
+    CONFIGURED_PORT=${CONFIGURED_PORT:-8080}
+
     echo ""
     echo "======================================"
     echo_info "妙妙屋安装完成！"
@@ -150,7 +160,7 @@ show_status() {
     echo ""
     echo "📦 安装位置: $INSTALL_DIR/$SERVICE_NAME"
     echo "💾 数据目录: $DATA_DIR"
-    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):8080"
+    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):$CONFIGURED_PORT"
     echo ""
     echo "常用命令:"
     echo "  启动服务: systemctl start $SERVICE_NAME"
@@ -200,6 +210,16 @@ update_service() {
     # 保存版本信息
     echo "$VERSION" > "$DATA_DIR/.version"
 
+    # 询问是否修改端口
+    CURRENT_PORT=$(grep "Environment=\"PORT=" /etc/systemd/system/${SERVICE_NAME}.service 2>/dev/null | sed 's/.*PORT=\([0-9]*\).*/\1/')
+    CURRENT_PORT=${CURRENT_PORT:-8080}
+    echo ""
+    read -p "请输入端口（当前: $CURRENT_PORT，直接回车保持不变）: " PORT_INPUT
+    PORT_INPUT=${PORT_INPUT:-$CURRENT_PORT}
+
+    # 更新 systemd 服务文件中的端口
+    sed -i "s/Environment=\"PORT=[0-9]*\"/Environment=\"PORT=$PORT_INPUT\"/" /etc/systemd/system/${SERVICE_NAME}.service
+
     # 重新加载 systemd 配置
     systemctl daemon-reload
 
@@ -211,7 +231,7 @@ update_service() {
         echo "======================================"
         echo ""
         echo "📦 版本: $VERSION"
-        echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):8080"
+        echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):$PORT_INPUT"
         echo ""
         echo "如遇问题可回滚到备份版本:"
         echo "  sudo systemctl stop $SERVICE_NAME"
@@ -237,7 +257,7 @@ main() {
         install_dependencies
         update_service
     else
-        echo_info "开始安装妙妙屋流量监控系统..."
+        echo_info "开始安装妙妙屋个人Clash订阅管理系统..."
         echo ""
 
         check_root

@@ -24,20 +24,20 @@ install() {
     # 保存版本信息
     echo "$VERSION" > "$VERSION_FILE"
 
+    # 询问端口号
+    echo ""
+    read -p "请输入端口（默认8080）: " PORT
+    PORT=${PORT:-8080}
+
+    # 设置环境变量并运行
+    export PORT=$PORT
+    nohup ./traffic-info > traffic-info.log 2>&1 &
+
     # 显示完成信息
     echo ""
     echo "✅ 安装完成！"
     echo ""
-    echo "赋予可执行权限:"
-    echo "  chmod +x ./traffic-info"
-    echo ""
-    echo "运行服务:"
-    echo "  ./traffic-info"
-    echo ""
-    echo "后台运行:"
-    echo "  nohup ./traffic-info > traffic-info.log 2>&1 &"
-    echo ""
-    echo "访问地址: http://localhost:8080"
+    echo "访问地址: http://localhost:$PORT"
     echo ""
     echo "更新版本:"
     echo "  curl -sL https://raw.githubusercontent.com/${GITHUB_REPO}/main/quick-install.sh | bash -s update"
@@ -86,16 +86,26 @@ update() {
     # 保存版本信息
     echo "$VERSION" > "$VERSION_FILE"
 
+    # 询问端口号
+    echo ""
+    read -p "请输入端口（默认8080）: " PORT
+    PORT=${PORT:-8080}
+
+    # 设置环境变量并运行
+    export PORT=$PORT
+    nohup ./traffic-info > traffic-info.log 2>&1 &
+
     echo ""
     echo "✅ 更新完成！"
     echo ""
     echo "📦 版本: $VERSION"
+    echo "🌐 访问地址: http://localhost:$PORT"
     echo ""
     echo "运行服务:"
-    echo "  ./traffic-info"
+    echo "  PORT=$PORT ./traffic-info"
     echo ""
     echo "后台运行:"
-    echo "  nohup ./traffic-info > traffic-info.log 2>&1 &"
+    echo "  PORT=$PORT nohup ./traffic-info > traffic-info.log 2>&1 &"
     echo ""
     echo "如遇问题可回滚到备份版本:"
     echo "  mv traffic-info.bak traffic-info"
