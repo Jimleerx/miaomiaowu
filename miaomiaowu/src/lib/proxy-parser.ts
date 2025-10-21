@@ -411,9 +411,8 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
         node['obfs-password'] = queryParams.obfsParam
         node.sni = queryParams.peer || queryParams.sni || (server.startsWith('[') ? '' : server)
         node.alpn = queryParams.alpn ? queryParams.alpn.split(',') : undefined
-        // Hysteria2: insecure=1 实际表示允许不安全连接，但 Clash 中默认 skip-cert-verify 为 false
-        // 根据用户需求，这里设置为 false
-        node.skipCertVerify = false
+        // insecure=1 表示跳过证书验证
+        node.skipCertVerify = queryParams.insecure === '1' || queryParams.allowInsecure === '1' || queryParams['skip-cert-verify'] === '1'
         node.up = queryParams.up || queryParams.upmbps
         node.down = queryParams.down || queryParams.downmbps
         // 只有在 URL 中明确指定了 fp 参数时才添加 client-fingerprint
@@ -557,9 +556,6 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     } else if (node.type === 'trojan') {
       // Trojan 默认使用 TLS
       clash.tls = true
-      if (node.sni) {
-        clash.sni = node.sni
-      }
     } else if (node.tls !== undefined) {
       clash.tls = node.tls
     }
@@ -594,11 +590,12 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     clash['reality-opts'] = realityOpts
   }
 
-  // servername/SNI - 不输出 servername，避免与 server 重复
-  // 如果需要 SNI，应该在特定协议的配置中处理
-  // if (node.servername || node.sni) {
-  //   clash.servername = node.servername || node.sni
-  // }
+  // SNI 设置 - 特定协议需要输出 sni 字段
+  if (node.type === 'hysteria' || node.type === 'hysteria2' || node.type === 'trojan' || node.type === 'tuic') {
+    if (node.sni && node.sni !== node.server) {
+      clash.sni = node.sni
+    }
+  }
 
   // Client Fingerprint (注意是 client-fingerprint 不是 fingerprint)
   if (node.fp || node.fingerprint) {
