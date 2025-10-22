@@ -73,6 +73,9 @@ jobs:
           - goos: linux
             goarch: amd64
             output: traffic-info-linux-amd64
+          - goos: linux
+            goarch: arm64
+            output: traffic-info-linux-arm64
           - goos: windows
             goarch: amd64
             output: traffic-info-windows-amd64.exe
@@ -157,7 +160,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -175,10 +178,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download Linux artifact
+      - name: Download Linux AMD64 artifact
         uses: actions/download-artifact@v4
         with:
           name: traffic-info-linux-amd64
+          path: release
+
+      - name: Download Linux ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: traffic-info-linux-arm64
           path: release
 
       - name: Download Windows artifact
@@ -188,12 +197,15 @@ jobs:
           path: release
 
       - name: Add executable permissions
-        run: chmod +x release/traffic-info-linux-amd64
+        run: |
+          chmod +x release/traffic-info-linux-amd64
+          chmod +x release/traffic-info-linux-arm64
 
       - name: Create checksums
         run: |
           cd release
           sha256sum traffic-info-linux-amd64 > checksums.txt
+          sha256sum traffic-info-linux-arm64 >> checksums.txt
           sha256sum traffic-info-windows-amd64.exe >> checksums.txt
 
       - name: Create Release
@@ -204,6 +216,7 @@ jobs:
           generate_release_notes: true
           files: |
             release/traffic-info-linux-amd64
+            release/traffic-info-linux-arm64
             release/traffic-info-windows-amd64.exe
             release/checksums.txt
         env:

@@ -37,13 +37,10 @@
 docker run -d \
   --name miaomiaowu \
   -p 8080:8080 \
-  -v ./traffic-info-data:/app/data \
-  -v ./subscribes:/app/subscribes \
-  -v ./rule_templates:/app/rule_templates \
   ghcr.io/jimleerx/miaomiaowu:latest
 ```
 
-说明：
+参数说明：
 - `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
 - `-v ./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
 - `-v ./subscribes:/app/subscribes` 订阅文件存放目录
@@ -71,10 +68,6 @@ services:
     container_name: miaomiaowu
     ports:
       - "8080:8080"
-    volumes:
-      - ./traffic-info-data:/app/data
-      - ./subscribes:/app/subscribes
-      - ./rule_templates:/app/rule_templates
     environment:
       - JWT_SECRET=your-custom-secret-key
       - LOG_LEVEL=info
@@ -86,6 +79,15 @@ services:
       retries: 3
       start_period: 5s
 ```
+
+说明：
+- `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
+- `volumes:`     这是挂载下面这三个目录到宿主机的，如果你不知道这三个目录是干嘛的，不需要添加
+- `./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `./subscribes:/app/subscribes` 订阅文件存放目录
+- `./rule_templates:/app/rule_templates` 规则模板存放目录
+- `-e JWT_SECRET=your-secret` 可选参数，配置token密钥，建议改成随机字符串
+- 其他环境变量（如 `LOG_LEVEL`）同下文“环境变量”章节，可通过 `-e` 继续添加。
 
 启动服务：
 

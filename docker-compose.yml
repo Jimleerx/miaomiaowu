@@ -6,10 +6,10 @@ services:
     container_name: traffic-info
     ports:
       - "8080:8080"
-    volumes:
+    #volumes:
       # Persist database and subscription files
-      - ./data:/app/data
-      - ./subscribes:/app/subscribes
+      #- ./data:/app/data
+      #- ./subscribes:/app/subscribes
     environment:
       # Optional: override default settings
       # DATABASE_PATH: /app/data/traffic.db
