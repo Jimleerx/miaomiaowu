@@ -3,7 +3,20 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { QRCodeCanvas } from 'qrcode.react'
-import { Copy, Download, Monitor, Network, QrCode, Smartphone } from 'lucide-react'
+import {
+  Copy,
+  Download,
+  Monitor,
+  Network,
+  QrCode,
+  Smartphone,
+  ChevronDown,
+  Globe,
+  Laptop,
+  Wifi,
+  Radio,
+  Shield
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Topbar } from '@/components/layout/topbar'
 import { api } from '@/lib/api'
@@ -23,6 +36,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+
+// Import local icons
+import clashIcon from '@/assets/icons/clash_color.png'
+import stashIcon from '@/assets/icons/stash_color.png'
+import shadowrocketIcon from '@/assets/icons/shadowrocket_color.png'
+import surfboardIcon from '@/assets/icons/surfboard_color.png'
+import surgeIcon from '@/assets/icons/surge_color.png'
+import surgeMacIcon from '@/assets/icons/surgeformac_icon_color.png'
+import loonIcon from '@/assets/icons/loon_color.png'
+import quanxIcon from '@/assets/icons/quanx_color.png'
+import egernIcon from '@/assets/icons/egern_color.png'
+import singboxIcon from '@/assets/icons/sing-box_color.png'
+import v2rayIcon from '@/assets/icons/v2ray_color.png'
+import uriIcon from '@/assets/icons/uri-color.svg'
 
 // @ts-ignore - retained simple route definition
 export const Route = createFileRoute('/subscription/')({
@@ -50,6 +83,22 @@ const ICON_MAP: Record<string, any> = {
   'openclash-redirhost': Network,
   'openclash-fakeip': Monitor,
 }
+
+// Client types configuration with icons and names
+const CLIENT_TYPES = [
+  { type: 'clash', name: 'Clash', icon: clashIcon },
+  { type: 'stash', name: 'Stash', icon: stashIcon },
+  { type: 'shadowrocket', name: 'Shadowrocket', icon: shadowrocketIcon },
+  { type: 'surfboard', name: 'Surfboard', icon: surfboardIcon },
+  { type: 'surge', name: 'Surge', icon: surgeIcon },
+  { type: 'surgemac', name: 'Surge Mac', icon: surgeMacIcon },
+  { type: 'loon', name: 'Loon', icon: loonIcon },
+  { type: 'qx', name: 'QuantumultX', icon: quanxIcon },
+  { type: 'egern', name: 'Egern', icon: egernIcon },
+  { type: 'sing-box', name: 'sing-box', icon: singboxIcon },
+  { type: 'v2ray', name: 'V2Ray', icon: v2rayIcon },
+  { type: 'uri', name: 'URI', icon: uriIcon },
+] as const
 
 function SubscriptionPage() {
   const { auth } = useAuthStore()
@@ -95,21 +144,24 @@ function SubscriptionPage() {
       ? `${window.location.protocol}//${window.location.host}`
       : 'http://localhost:8080')
 
-  const buildSubscriptionURL = (filename: string) => {
+  const buildSubscriptionURL = (filename: string, clientType?: string) => {
     // Build URL with filename and user token for authentication
     const url = new URL('/api/clash/subscribe', baseURL)
     url.searchParams.set('filename', filename)
+    if (clientType) {
+      url.searchParams.set('t', clientType)
+    }
     if (userToken) {
       url.searchParams.set('token', userToken)
     }
     return url.toString()
   }
 
-  const handleCopy = async (urlText: string) => {
+  const handleCopy = async (urlText: string, clientName: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(urlText)
-        toast.success('订阅链接已复制')
+        toast.success(`${clientName} 订阅链接已复制`)
         return
       } catch (_) {
         // fall through
@@ -125,11 +177,12 @@ function SubscriptionPage() {
       <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
         <section className='space-y-4 text-center sm:text-left'>
           <h1 className='text-3xl font-semibold tracking-tight'>订阅链接</h1>
+          <p className='mt-2 text-sm font-semibold text-destructive'>转换客户端代理是从substore抄过来的, 没有完全测试，有BUG请联系开发者</p>
         </section>
 
-        <section className='mt-8 grid gap-6 lg:grid-cols-3'>
+        <section className='mt-8 grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
           {subscribeFiles.length === 0 ? (
-            <Card className='lg:col-span-3 border-dashed shadow-none'>
+            <Card className='sm:col-span-1 md:col-span-2 lg:col-span-3 border-dashed shadow-none w-full'>
               <CardHeader>
                 <CardTitle>暂无可用订阅</CardTitle>
                 <CardDescription>管理员尚未为您分配订阅链接，请联系管理员进行分配。</CardDescription>
@@ -150,12 +203,16 @@ function SubscriptionPage() {
             const showImport = true
 
             return (
-              <Card key={file.id} className='flex min-w-[320px] flex-col justify-between'>
+              <Card key={file.id} className='flex flex-col justify-between'>
                 <CardHeader>
                   <div className='flex items-start gap-3'>
-                    <div className='flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary'>
+                    <button
+                      onClick={() => setQrValue(subscribeURL)}
+                      className='flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all hover:bg-primary/20 hover:scale-110 active:scale-95 cursor-pointer'
+                      title='点击显示二维码'
+                    >
                       <Icon className='size-6' />
-                    </div>
+                    </button>
                     <div className='space-y-1 text-left'>
                       <CardTitle className='text-lg'>{file.name}</CardTitle>
                       <CardDescription>{file.description || '—'}</CardDescription>
@@ -171,43 +228,48 @@ function SubscriptionPage() {
                   <div className='break-all rounded-lg border bg-muted/40 p-3 font-mono text-xs shadow-inner sm:text-sm'>
                     {subscribeURL}
                   </div>
-                  <div className='flex items-center justify-between gap-3'>
-                    {showQR ? (
+                  <div className='grid grid-cols-2 gap-2'>
+                    {showCopy ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size='sm'
+                            className='w-full transition-transform hover:-translate-y-0.5 hover:shadow-md active:translate-y-0.5 active:scale-95'
+                          >
+                            <Copy className='mr-2 size-4' />
+                            复制
+                            <ChevronDown className='ml-2 size-4' />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align='end' className='w-56'>
+                          {CLIENT_TYPES.map((client) => {
+                            const clientURL = buildSubscriptionURL(file.filename, client.type)
+                            return (
+                              <DropdownMenuItem
+                                key={client.type}
+                                onClick={() => handleCopy(clientURL, client.name)}
+                                className='cursor-pointer'
+                              >
+                                <img src={client.icon} alt={client.name} className='mr-2 size-4' />
+                                {client.name}
+                              </DropdownMenuItem>
+                            )
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                    {showImport ? (
                       <Button
                         size='sm'
-                        variant='outline'
-                        className='px-2'
-                        title='显示二维码'
-                        onClick={() => setQrValue(subscribeURL)}
+                        variant='secondary'
+                        className='w-full transition-transform hover:-translate-y-0.5 hover:shadow-md active:translate-y-0.5 active:scale-95'
+                        asChild
                       >
-                        <QrCode className='size-4' />
+                        <a href={clashURL}>
+                          <Download className='mr-2 size-4' />导入 Clash
+                        </a>
                       </Button>
-                    ) : (
-                      <div className='w-10' />
-                    )}
-                    <div className='flex flex-1 items-center justify-end gap-2'>
-                      {showCopy ? (
-                        <Button
-                          size='sm'
-                          className='transition-transform hover:-translate-y-0.5 hover:shadow-md active:translate-y-0.5 active:scale-95'
-                          onClick={() => handleCopy(subscribeURL)}
-                        >
-                          <Copy className='mr-2 size-4' />复制
-                        </Button>
-                      ) : null}
-                      {showImport ? (
-                        <Button
-                          size='sm'
-                          variant='secondary'
-                          className='transition-transform hover:-translate-y-0.5 hover:shadow-md active:translate-y-0.5 active:scale-95'
-                          asChild
-                        >
-                          <a href={clashURL}>
-                            <Download className='mr-2 size-4' />导入 Clash
-                          </a>
-                        </Button>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>

@@ -49,6 +49,28 @@ import type { PredefinedRuleSetType, CustomRule } from '@/lib/sublink/types'
 import type { ProxyConfig } from '@/lib/sublink/types'
 import yaml from 'js-yaml'
 
+// 重新排序代理节点字段，将 name, type, server, port 放在最前面
+function reorderProxyFields(proxy: ProxyConfig): ProxyConfig {
+  const ordered: any = {}
+  const priorityKeys = ['name', 'type', 'server', 'port']
+
+  // 先添加优先字段
+  for (const key of priorityKeys) {
+    if (key in proxy) {
+      ordered[key] = (proxy as any)[key]
+    }
+  }
+
+  // 再添加其他字段
+  for (const [key, value] of Object.entries(proxy)) {
+    if (!priorityKeys.includes(key)) {
+      ordered[key] = value
+    }
+  }
+
+  return ordered as ProxyConfig
+}
+
 type SavedNode = {
   id: number
   raw_url: string
@@ -101,6 +123,12 @@ function SubscriptionGeneratorPage() {
   const [draggedItem, setDraggedItem] = useState<{ proxy: string; sourceGroup: string | null; sourceIndex: number } | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 缺失节点替换对话框状态
+  const [missingNodesDialogOpen, setMissingNodesDialogOpen] = useState(false)
+  const [missingNodes, setMissingNodes] = useState<string[]>([])
+  const [replacementChoice, setReplacementChoice] = useState<'PROXY' | 'DIRECT'>('DIRECT')
+  const [pendingConfigAfterGrouping, setPendingConfigAfterGrouping] = useState<string>('')
 
   // 获取已保存的节点
   const { data: nodesData } = useQuery({
@@ -200,8 +228,8 @@ function SubscriptionGeneratorPage() {
       // 解析模板
       const templateConfig = yaml.load(templateContent) as any
 
-      // 插入代理节点
-      templateConfig.proxies = proxies
+      // 插入代理节点，并重新排序字段
+      templateConfig.proxies = proxies.map(proxy => reorderProxyFields(proxy))
 
       // 转换回 YAML
       const finalConfig = yaml.dump(templateConfig, {
@@ -399,19 +427,154 @@ function SubscriptionGeneratorPage() {
         proxies: group.proxies.filter((p): p is string => p !== undefined)
       }))
 
+      // 重新排序 proxies 字段
+      if (parsedConfig.proxies && Array.isArray(parsedConfig.proxies)) {
+        parsedConfig.proxies = parsedConfig.proxies.map((proxy: any) => reorderProxyFields(proxy))
+      }
+
       // 转换回 YAML
       const newConfig = yaml.dump(parsedConfig, {
         lineWidth: -1,
         noRefs: true,
       })
 
-      setClashConfig(newConfig)
-      setGroupDialogOpen(false)
-      setHasManuallyGrouped(true) // 标记已手动分组
-      toast.success('分组已应用到配置')
+      // 验证 rules 中引用的节点是否都存在
+      const validationResult = validateRulesNodes(parsedConfig)
+
+      if (validationResult.missingNodes.length > 0) {
+        // 有缺失的节点，显示替换对话框
+        setMissingNodes(validationResult.missingNodes)
+        setPendingConfigAfterGrouping(newConfig)
+        setMissingNodesDialogOpen(true)
+      } else {
+        // 没有缺失节点，直接应用
+        setClashConfig(newConfig)
+        setGroupDialogOpen(false)
+        setHasManuallyGrouped(true)
+        toast.success('分组已应用到配置')
+      }
     } catch (error) {
       console.error('应用分组失败:', error)
       toast.error('应用分组失败，请检查配置')
+    }
+  }
+
+  // 验证 rules 中的节点是否存在于 proxy-groups 中
+  const validateRulesNodes = (parsedConfig: any) => {
+    const rules = parsedConfig.rules || []
+    const proxyGroupNames = new Set(parsedConfig['proxy-groups']?.map((g: any) => g.name) || [])
+
+    // 添加特殊节点
+    proxyGroupNames.add('DIRECT')
+    proxyGroupNames.add('REJECT')
+    proxyGroupNames.add('PROXY')
+
+    const missingNodes = new Set<string>()
+
+    // 检查每条规则
+    rules.forEach((rule: string) => {
+      if (typeof rule !== 'string') return
+
+      const parts = rule.split(',')
+      if (parts.length < 2) return
+
+      // 规则的最后一部分是节点名称
+      const nodeName = parts[parts.length - 1].trim()
+
+      // 如果节点名称不在 proxy-groups 中，添加到缺失列表
+      if (nodeName && !proxyGroupNames.has(nodeName)) {
+        missingNodes.add(nodeName)
+      }
+    })
+
+    return {
+      missingNodes: Array.from(missingNodes)
+    }
+  }
+
+  // 应用缺失节点替换
+  const handleApplyReplacement = () => {
+    try {
+      const parsedConfig = yaml.load(pendingConfigAfterGrouping) as any
+      const rules = parsedConfig.rules || []
+      const proxyGroupNames = new Set(parsedConfig['proxy-groups']?.map((g: any) => g.name) || [])
+
+      // 添加特殊节点
+      proxyGroupNames.add('DIRECT')
+      proxyGroupNames.add('REJECT')
+      proxyGroupNames.add('PROXY')
+
+      // 替换 rules 中缺失的节点
+      parsedConfig.rules = rules.map((rule: string) => {
+        if (typeof rule !== 'string') return rule
+
+        const parts = rule.split(',')
+        if (parts.length < 2) return rule
+
+        const nodeName = parts[parts.length - 1].trim()
+
+        // 如果节点缺失，替换为用户选择的值
+        if (nodeName && !proxyGroupNames.has(nodeName)) {
+          parts[parts.length - 1] = replacementChoice
+          return parts.join(',')
+        }
+
+        return rule
+      })
+
+      // 重新排序 proxies 字段
+      if (parsedConfig.proxies && Array.isArray(parsedConfig.proxies)) {
+        parsedConfig.proxies = parsedConfig.proxies.map((proxy: any) => reorderProxyFields(proxy))
+      }
+
+      // 转换回 YAML
+      const finalConfig = yaml.dump(parsedConfig, {
+        lineWidth: -1,
+        noRefs: true,
+      })
+
+      setClashConfig(finalConfig)
+      setGroupDialogOpen(false)
+      setMissingNodesDialogOpen(false)
+      setHasManuallyGrouped(true)
+      setPendingConfigAfterGrouping('')
+      setMissingNodes([])
+      toast.success(`已将缺失节点替换为 ${replacementChoice}`)
+    } catch (error) {
+      console.error('应用替换失败:', error)
+      toast.error('应用替换失败，请检查配置')
+    }
+  }
+
+  // 配置链式代理
+  const handleConfigureChainProxy = () => {
+    // 检查是否已存在这两个代理组
+    const hasLandingNode = proxyGroups.some(g => g.name === '🌄 落地节点')
+    const hasRelayNode = proxyGroups.some(g => g.name === '🌠 中转节点')
+
+    const newGroups: ProxyGroup[] = []
+
+    if (!hasLandingNode) {
+      newGroups.push({
+        name: '🌄 落地节点',
+        type: 'select',
+        proxies: []
+      })
+    }
+
+    if (!hasRelayNode) {
+      newGroups.push({
+        name: '🌠 中转节点',
+        type: 'select',
+        proxies: []
+      })
+    }
+
+    if (newGroups.length > 0) {
+      setProxyGroups(groups => [...newGroups, ...groups])
+      toast.success(`已添加 ${newGroups.map(g => g.name).join('、')}`)
+    } else {
+      toast.info('链式代理节点已存在')
     }
   }
 
@@ -985,6 +1148,16 @@ function SubscriptionGeneratorPage() {
                   </CardContent>
                 </Card>
 
+                {/* 配置链式代理按钮 */}
+                <Button
+                  variant='outline'
+                  className='w-full mt-4'
+                  onClick={handleConfigureChainProxy}
+                >
+                  <Layers className='mr-2 h-4 w-4' />
+                  配置链式代理
+                </Button>
+
                 {/* 操作按钮 */}
                 <div className='flex gap-2 mt-4'>
                   <Button variant='outline' onClick={() => setGroupDialogOpen(false)} className='flex-1'>
@@ -997,6 +1170,62 @@ function SubscriptionGeneratorPage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 缺失节点替换对话框 */}
+      <Dialog open={missingNodesDialogOpen} onOpenChange={setMissingNodesDialogOpen}>
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle>发现缺失节点</DialogTitle>
+            <DialogDescription>
+              以下节点在 rules 中被引用，但不存在于 proxy-groups 中
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            {/* 缺失节点列表 */}
+            <div className='max-h-[200px] overflow-y-auto border rounded-md p-3 space-y-1'>
+              {missingNodes.map((node, index) => (
+                <div key={index} className='text-sm font-mono bg-muted px-2 py-1 rounded'>
+                  {node}
+                </div>
+              ))}
+            </div>
+
+            {/* 替换选项 */}
+            <div className='space-y-2'>
+              <Label>选择替换为：</Label>
+              <div className='flex gap-2'>
+                <Button
+                  variant={replacementChoice === 'DIRECT' ? 'default' : 'outline'}
+                  onClick={() => setReplacementChoice('DIRECT')}
+                  className='flex-1'
+                >
+                  DIRECT
+                </Button>
+                <Button
+                  variant={replacementChoice === 'PROXY' ? 'default' : 'outline'}
+                  onClick={() => setReplacementChoice('PROXY')}
+                  className='flex-1'
+                >
+                  PROXY
+                </Button>
+              </div>
+              <p className='text-xs text-muted-foreground'>
+                将把上述缺失的节点替换为 <span className='font-semibold'>{replacementChoice}</span>
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setMissingNodesDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleApplyReplacement}>
+              确认替换
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

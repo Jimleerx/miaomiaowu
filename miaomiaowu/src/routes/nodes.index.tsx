@@ -17,6 +17,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { parseProxyUrl, toClashProxy, type ProxyNode, type ClashProxy } from '@/lib/proxy-parser'
+import { Check, Pencil, X, Undo2 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import IpIcon from '@/assets/icons/ip.svg'
 
 // @ts-ignore - retained simple route definition
 export const Route = createFileRoute('/nodes/')({
@@ -45,9 +48,11 @@ type ParsedNode = {
 type TempNode = {
   id: string
   rawUrl: string
+  name: string
   parsed: ProxyNode | null
   clash: ClashProxy | null
   enabled: boolean
+  originalServer?: string // 保存原始服务器地址，用于回退
 }
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -63,6 +68,18 @@ const PROTOCOL_COLORS: Record<string, string> = {
 
 const PROTOCOLS = ['vmess', 'vless', 'trojan', 'ss', 'socks5', 'hysteria', 'hysteria2', 'tuic']
 
+// 检查是否是IP地址（IPv4或IPv6）
+function isIpAddress(hostname: string): boolean {
+  if (!hostname) return false
+
+  // IPv4正则
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/
+  // IPv6正则（简化版）
+  const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/
+
+  return ipv4Regex.test(hostname) || ipv6Regex.test(hostname)
+}
+
 function NodesPage() {
   const { auth } = useAuthStore()
   const queryClient = useQueryClient()
@@ -72,6 +89,9 @@ function NodesPage() {
   const [selectedProtocol, setSelectedProtocol] = useState<string>('all')
   const [currentTag, setCurrentTag] = useState<string>('manual') // 'manual' 或 'subscription'
   const [tagFilter, setTagFilter] = useState<string>('all')
+  const [editingNode, setEditingNode] = useState<{ id: string; value: string } | null>(null)
+  const [resolvingIpFor, setResolvingIpFor] = useState<string | null>(null) // 正在解析IP的节点ID
+  const [ipMenuState, setIpMenuState] = useState<{ nodeId: string; ips: string[] } | null>(null) // IP选择菜单状态
 
   // 获取已保存的节点
   const { data: nodesData } = useQuery({
@@ -85,6 +105,170 @@ function NodesPage() {
 
   const savedNodes = useMemo(() => nodesData?.nodes ?? [], [nodesData?.nodes])
 
+  const updateConfigName = (config, name) => {
+    if (!config) return config
+    try {
+      const parsed = JSON.parse(config)
+      if (parsed && typeof parsed === 'object') {
+        parsed.name = name
+      }
+      return JSON.stringify(parsed)
+    } catch (error) {
+      return config
+    }
+  }
+
+  const cloneProxyWithName = (proxy, name) => {
+    if (!proxy || typeof proxy !== 'object') {
+      return proxy
+    }
+    return {
+      ...proxy,
+      name,
+    }
+  }
+
+  const updateNodeNameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const target = savedNodes.find(n => n.id === id)
+      if (!target) {
+        throw new Error('未找到节点?')
+      }
+      const updatedParsedConfig = updateConfigName(target.parsed_config, name)
+      const updatedClashConfig = updateConfigName(target.clash_config, name)
+      const response = await api.put(`/api/nodes/${id}`, {
+        raw_url: target.raw_url,
+        node_name: name,
+        protocol: target.protocol,
+        parsed_config: updatedParsedConfig,
+        clash_config: updatedClashConfig,
+        enabled: target.enabled,
+        tag: target.tag,
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      toast.success('节点名称已更新')
+      setEditingNode(null)
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '节点名称更新失败')
+    },
+  })
+
+  // DNS解析IP地址
+  const resolveIpMutation = useMutation({
+    mutationFn: async (hostname: string) => {
+      const response = await api.get(`/api/dns/resolve?hostname=${encodeURIComponent(hostname)}`)
+      return response.data as { ips: string[] }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'IP解析失败')
+      setResolvingIpFor(null)
+    },
+  })
+
+  // 更新节点服务器地址
+  const updateNodeServerMutation = useMutation({
+    mutationFn: async (payload: { nodeId: number; server: string }) => {
+      const response = await api.put(`/api/nodes/${payload.nodeId}/server`, { server: payload.server })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      toast.success('服务器地址已更新')
+      setResolvingIpFor(null)
+      setIpMenuState(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '服务器地址更新失败')
+      setResolvingIpFor(null)
+    },
+  })
+
+  // 处理IP解析
+  const handleResolveIp = async (node: TempNode) => {
+    if (!node.parsed?.server) return
+
+    const nodeKey = node.isSaved ? String(node.dbId) : node.id
+    setResolvingIpFor(nodeKey)
+
+    try {
+      const result = await resolveIpMutation.mutateAsync(node.parsed.server)
+
+      if (result.ips.length === 0) {
+        toast.error('未解析到IP地址')
+        setResolvingIpFor(null)
+        return
+      }
+
+      if (result.ips.length === 1) {
+        // 只有一个IP，直接更新
+        if (node.isSaved && node.dbId) {
+          // 已保存的节点，调用API更新
+          updateNodeServerMutation.mutate({
+            nodeId: node.dbId,
+            server: result.ips[0],
+          })
+        } else {
+          // 未保存的节点，更新临时节点列表
+          updateTempNodeServer(node.id, result.ips[0])
+          setResolvingIpFor(null)
+        }
+      } else {
+        // 多个IP，显示菜单让用户选择
+        setIpMenuState({ nodeId: nodeKey, ips: result.ips })
+        setResolvingIpFor(null)
+      }
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  }
+
+  // 更新临时节点的服务器地址
+  const updateTempNodeServer = (nodeId: string, server: string) => {
+    setTempNodes(prev => prev.map(n => {
+      if (n.id !== nodeId) return n
+
+      // 如果还没有保存原始服务器地址，则保存当前的
+      const originalServer = n.originalServer || n.parsed?.server
+
+      // 更新 parsed 配置
+      const updatedParsed = n.parsed ? { ...n.parsed, server } : n.parsed
+
+      // 更新 clash 配置
+      const updatedClash = n.clash ? { ...n.clash, server } : n.clash
+
+      return {
+        ...n,
+        parsed: updatedParsed,
+        clash: updatedClash,
+        originalServer,
+      }
+    }))
+    toast.success('服务器地址已更新')
+  }
+
+  // 恢复临时节点的原始服务器地址
+  const restoreTempNodeServer = (nodeId: string) => {
+    setTempNodes(prev => prev.map(n => {
+      if (n.id !== nodeId || !n.originalServer) return n
+
+      // 恢复到原始服务器地址
+      const updatedParsed = n.parsed ? { ...n.parsed, server: n.originalServer } : n.parsed
+      const updatedClash = n.clash ? { ...n.clash, server: n.originalServer } : n.clash
+
+      return {
+        ...n,
+        parsed: updatedParsed,
+        clash: updatedClash,
+        originalServer: undefined, // 清除原始服务器地址标记
+      }
+    }))
+    toast.success('已恢复原始服务器地址')
+  }
+
   // 批量创建节点
   const batchCreateMutation = useMutation({
     mutationFn: async (nodes: TempNode[]) => {
@@ -92,10 +276,10 @@ function NodesPage() {
 
       const payload = nodes.map(n => ({
         raw_url: n.rawUrl,
-        node_name: n.parsed?.name || '未知',
+        node_name: n.name || '未知',
         protocol: n.parsed?.type || 'unknown',
-        parsed_config: n.parsed ? JSON.stringify(n.parsed) : '',
-        clash_config: n.clash ? JSON.stringify(n.clash) : '',
+        parsed_config: n.parsed ? JSON.stringify(cloneProxyWithName(n.parsed, n.name)) : '',
+        clash_config: n.clash ? JSON.stringify(cloneProxyWithName(n.clash, n.name)) : '',
         enabled: n.enabled,
         tag: tag,
       }))
@@ -183,12 +367,16 @@ function NodesPage() {
           port: clashNode.port || 0,
           ...clashNode,
         }
+        const name = proxyNode.name || '未知'
+        const parsedProxy = cloneProxyWithName(proxyNode, name)
+        const clashProxy = cloneProxyWithName(clashNode, name)
 
         return {
           id: Math.random().toString(36).substring(7),
           rawUrl: '', // Clash订阅的节点没有原始URL
-          parsed: proxyNode,
-          clash: clashNode,
+          name,
+          parsed: parsedProxy,
+          clash: clashProxy,
           enabled: true,
         }
       })
@@ -212,12 +400,16 @@ function NodesPage() {
 
       const parsedNode = parseProxyUrl(trimmed)
       const clashNode = parsedNode ? toClashProxy(parsedNode) : null
+       const name = parsedNode?.name || clashNode?.name || '未知'
+       const normalizedParsed = cloneProxyWithName(parsedNode, name)
+       const normalizedClash = cloneProxyWithName(clashNode, name)
 
       parsed.push({
         id: Math.random().toString(36).substring(7),
         rawUrl: trimmed,
-        parsed: parsedNode,
-        clash: clashNode,
+        name,
+        parsed: normalizedParsed,
+        clash: normalizedClash,
         enabled: true,
       })
     }
@@ -250,6 +442,50 @@ function NodesPage() {
     toast.success('已移除临时节点')
   }
 
+  const handleNameEditStart = (node) => {
+    setEditingNode({ id: node.id, value: node.name })
+  }
+
+  const handleNameEditChange = (value: string) => {
+    setEditingNode(prev => (prev ? { ...prev, value } : prev))
+  }
+
+  const handleNameEditCancel = () => {
+    setEditingNode(null)
+  }
+
+  const handleNameEditSubmit = (node) => {
+    if (!editingNode) return
+    const trimmed = editingNode.value.trim()
+    if (!trimmed) {
+      toast.error('节点名称不能为空')
+      return
+    }
+    if (trimmed === node.name) {
+      setEditingNode(null)
+      return
+    }
+
+    if (node.isSaved) {
+      updateNodeNameMutation.mutate({ id: node.dbId, name: trimmed })
+      return
+    }
+
+    setTempNodes(prev =>
+      prev.map(item => {
+        if (item.id !== node.id) return item
+        return {
+          ...item,
+          name: trimmed,
+          parsed: cloneProxyWithName(item.parsed, trimmed),
+          clash: cloneProxyWithName(item.clash, trimmed),
+        }
+      }),
+    )
+    toast.success('已更新临时节点名称')
+    setEditingNode(null)
+  }
+
   const handleClearAll = () => {
     clearAllMutation.mutate()
   }
@@ -274,11 +510,15 @@ function NodesPage() {
       } catch (e) {
         // 解析失败，保持 null
       }
+      const displayName = (n.node_name && n.node_name.trim()) || parsed?.name || '未知'
+      const parsedWithName = cloneProxyWithName(parsed, displayName)
+      const clashWithName = cloneProxyWithName(clash, displayName)
       return {
         id: n.id.toString(),
         rawUrl: n.raw_url,
-        parsed,
-        clash,
+        name: displayName,
+        parsed: parsedWithName,
+        clash: clashWithName,
         enabled: n.enabled,
         tag: n.tag || '手动输入',
         isSaved: true,
@@ -289,6 +529,8 @@ function NodesPage() {
     // 临时节点
     const temp = tempNodes.map(n => ({
       ...n,
+      parsed: cloneProxyWithName(n.parsed, n.name),
+      clash: cloneProxyWithName(n.clash, n.name),
       isSaved: false,
       dbId: 0,
     }))
@@ -537,12 +779,61 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                               )}
                             </TableCell>
                             <TableCell className='font-medium'>
-                              <div className='flex items-center gap-2'>
-                                {node.parsed?.name || '未知'}
-                                {node.isSaved && (
-                                  <Badge variant='secondary' className='text-xs'>已保存</Badge>
-                                )}
-                              </div>
+                              {editingNode?.id === node.id ? (
+                                <div className='flex items-center gap-2'>
+                                  <Input
+                                    value={editingNode.value}
+                                    onChange={(event) => handleNameEditChange(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault()
+                                        handleNameEditSubmit(node)
+                                      } else if (event.key === 'Escape') {
+                                        event.preventDefault()
+                                        handleNameEditCancel()
+                                      }
+                                    }}
+                                    className='h-8 w-48'
+                                    autoFocus
+                                  />
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    className='size-8 text-emerald-600'
+                                    onClick={() => handleNameEditSubmit(node)}
+                                    disabled={node.isSaved ? updateNodeNameMutation.isPending : false}
+                                  >
+                                    <Check className='size-4' />
+                                  </Button>
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    className='size-8 text-muted-foreground'
+                                    onClick={handleNameEditCancel}
+                                  >
+                                    <X className='size-4' />
+                                  </Button>
+                                  {node.isSaved && (
+                                    <Badge variant='secondary' className='text-xs'>已保存</Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className='flex items-center gap-2'>
+                                  <span className='truncate max-w-[200px]'>{node.name || '未知'}</span>
+                                  {node.isSaved && (
+                                    <Badge variant='secondary' className='text-xs'>已保存</Badge>
+                                  )}
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    className='size-7 text-muted-foreground'
+                                    onClick={() => handleNameEditStart(node)}
+                                    disabled={node.isSaved ? updateNodeNameMutation.isPending : false}
+                                  >
+                                    <Pencil className='size-4' />
+                                  </Button>
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               {node.isSaved && node.tag && (
@@ -554,14 +845,90 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                             <TableCell>
                               <div className='text-sm text-muted-foreground'>
                                 {node.parsed ? (
-                                  <div>
-                                    <div className='font-mono'>{node.parsed.server}:{node.parsed.port}</div>
-                                    {node.parsed.network && node.parsed.network !== 'tcp' && (
-                                      <div className='text-xs mt-1'>
-                                        <Badge variant='outline' className='text-xs'>
-                                          {node.parsed.network}
-                                        </Badge>
-                                      </div>
+                                  <div className='flex items-center gap-2'>
+                                    <div>
+                                      <div className='font-mono'>{node.parsed.server}:{node.parsed.port}</div>
+                                      {node.parsed.network && node.parsed.network !== 'tcp' && (
+                                        <div className='text-xs mt-1'>
+                                          <Badge variant='outline' className='text-xs'>
+                                            {node.parsed.network}
+                                          </Badge>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {node.parsed?.server && (
+                                      (() => {
+                                        const nodeKey = node.isSaved ? String(node.dbId) : node.id
+                                        const serverIsIp = isIpAddress(node.parsed.server)
+                                        const hasOriginalServer = !node.isSaved && node.originalServer
+
+                                        // 已保存的节点且服务器地址已经是IP，不显示按钮
+                                        if (node.isSaved && serverIsIp) {
+                                          return null
+                                        }
+
+                                        // 未保存的节点且有原始服务器地址，显示回退按钮
+                                        if (hasOriginalServer) {
+                                          return (
+                                            <Button
+                                              variant='ghost'
+                                              size='sm'
+                                              className='size-6 p-0 border border-orange-500/50 hover:border-orange-500'
+                                              title='恢复原始域名'
+                                              onClick={() => restoreTempNodeServer(node.id)}
+                                            >
+                                              <Undo2 className='size-4 text-orange-500' />
+                                            </Button>
+                                          )
+                                        }
+
+                                        // 显示IP解析菜单或按钮
+                                        return ipMenuState?.nodeId === nodeKey ? (
+                                          <DropdownMenu open={true} onOpenChange={(open) => !open && setIpMenuState(null)}>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                variant='ghost'
+                                                size='sm'
+                                                className='size-6 p-0 border border-primary/50 hover:border-primary'
+                                                title='选择IP地址'
+                                              >
+                                                <img src={IpIcon} alt='IP' className='size-4' />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align='start'>
+                                              {ipMenuState.ips.map((ip) => (
+                                                <DropdownMenuItem
+                                                  key={ip}
+                                                  onClick={() => {
+                                                    if (node.isSaved && node.dbId) {
+                                                      updateNodeServerMutation.mutate({
+                                                        nodeId: node.dbId,
+                                                        server: ip,
+                                                      })
+                                                    } else {
+                                                      updateTempNodeServer(node.id, ip)
+                                                      setIpMenuState(null)
+                                                    }
+                                                  }}
+                                                >
+                                                  <span className='font-mono'>{ip}</span>
+                                                </DropdownMenuItem>
+                                              ))}
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        ) : (
+                                          <Button
+                                            variant='ghost'
+                                            size='sm'
+                                            className='size-6 p-0 border border-primary/50 hover:border-primary'
+                                            title='解析IP地址'
+                                            disabled={resolvingIpFor === nodeKey}
+                                            onClick={() => handleResolveIp(node)}
+                                          >
+                                            <img src={IpIcon} alt='IP' className='size-4' />
+                                          </Button>
+                                        )
+                                      })()
                                     )}
                                   </div>
                                 ) : (
@@ -583,7 +950,7 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                     <DialogHeader>
                                       <DialogTitle>Clash 配置详情</DialogTitle>
                                       <DialogDescription>
-                                        {node.parsed?.name || '未知'}
+                                        {node.name || '未知'}
                                       </DialogDescription>
                                     </DialogHeader>
                                     <div className='mt-4'>
@@ -625,7 +992,7 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>确认删除</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      确定要删除节点 "{node.parsed?.name || '未知'}" 吗？
+                                      确定要删除节点 "{node.name || '未知'}" 吗？
                                       {node.isSaved && '此操作不可撤销。'}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>

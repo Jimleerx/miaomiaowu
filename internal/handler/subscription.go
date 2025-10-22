@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +13,9 @@ import (
 
 	"traffic-info/internal/auth"
 	"traffic-info/internal/storage"
+	"traffic-info/internal/substore"
+
+	"gopkg.in/yaml.v3"
 )
 
 const subscriptionDefaultType = "clash"
@@ -130,13 +134,11 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Get filename from query parameter (new approach, replacing 't' parameter)
 	filename := strings.TrimSpace(r.URL.Query().Get("filename"))
 	var subscribeFile storage.SubscribeFile
 	var displayName string
 
 	if filename != "" {
-		// New approach: direct filename from subscribe_files table
 		subscribeFile, err = h.repo.GetSubscribeFileByFilename(r.Context(), filename)
 		if err != nil {
 			if errors.Is(err, storage.ErrSubscribeFileNotFound) {
@@ -148,7 +150,8 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		}
 		displayName = subscribeFile.Name
 	} else {
-		// Fallback: try legacy 't' parameter for backward compatibility
+		// TODO: 订阅链接已经配置到客户端，管理员修改文件名后，原订阅链接无法使用
+		// 1.0 版本时改为与表里的ID关联，暂时先不改
 		legacyName := strings.TrimSpace(r.URL.Query().Get("t"))
 		link, err := h.resolveSubscription(r.Context(), legacyName)
 		if err != nil {
@@ -181,20 +184,62 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// 根据参数t的类型调用substore的转换代码
+	clientType := strings.TrimSpace(r.URL.Query().Get("t"))
+	// 默认浏览器打开时直接输入文本, 不再下载问卷
+	contentType := "text/yaml; charset=utf-8; charset=UTF-8"
 	ext := filepath.Ext(filename)
 	if ext == "" {
 		ext = ".yaml"
 	}
+
+	// clash 和 clashmeta 类型直接输出源文件, 不需要转换
+	if clientType != "" && clientType != "clash" && clientType != "clashmeta" {
+		// Convert subscription using substore producers
+		convertedData, err := h.convertSubscription(data, clientType)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("failed to convert subscription for client %s: %w", clientType, err))
+			return
+		}
+		data = convertedData
+
+		// Set content type and extension based on client type
+		switch clientType {
+		case "surge", "surgemac", "loon", "qx", "surfboard", "shadowrocket":
+			// Text-based formats
+			contentType = "text/plain; charset=utf-8"
+			ext = ".txt"
+		case "sing-box":
+			// JSON format
+			contentType = "application/json; charset=utf-8"
+			ext = ".json"
+		case "v2ray":
+			// Base64 format
+			contentType = "text/plain; charset=utf-8"
+			ext = ".txt"
+		case "uri":
+			// URI format
+			contentType = "text/plain; charset=utf-8"
+			ext = ".txt"
+		default:
+			// YAML-based formats (clash, clashmeta, stash, shadowrocket, egern)
+			contentType = "text/yaml; charset=utf-8"
+			ext = ".yaml"
+		}
+	}
+
 	attachmentName := url.PathEscape("妙妙屋-" + displayName + ext)
 
-	w.Header().Set("Content-Type", "application/octet-stream; charset=UTF-8")
+	w.Header().Set("Content-Type", contentType)
 	// 只有在有流量信息时才添加 subscription-userinfo 头
 	if hasTrafficInfo {
 		headerValue := buildSubscriptionHeader(totalLimit, totalUsed)
 		w.Header().Set("subscription-userinfo", headerValue)
 	}
 	w.Header().Set("profile-update-interval", "24")
-	w.Header().Set("content-disposition", "attachment;filename*=UTF-8''"+attachmentName)
+	if clientType == "" {
+		w.Header().Set("content-disposition", "attachment;filename*=UTF-8''"+attachmentName)
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
 }
@@ -230,4 +275,60 @@ func buildSubscriptionHeader(totalLimit, totalUsed int64) string {
 	download := strconv.FormatInt(totalUsed, 10)
 	total := strconv.FormatInt(totalLimit, 10)
 	return "upload=0; download=" + download + "; total=" + total + "; expire="
+}
+
+// convertSubscription converts a YAML subscription file to the specified client format
+func (h *SubscriptionHandler) convertSubscription(yamlData []byte, clientType string) ([]byte, error) {
+	// 读取yaml
+	var config map[string]interface{}
+	if err := yaml.Unmarshal(yamlData, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	// 读取yaml中proxies属性的节点列表
+	proxiesRaw, ok := config["proxies"]
+	if !ok {
+		return nil, errors.New("no 'proxies' field found in YAML")
+	}
+
+	proxiesArray, ok := proxiesRaw.([]interface{})
+	if !ok {
+		return nil, errors.New("'proxies' field is not an array")
+	}
+
+	// 转换成substore的Proxy结构
+	var proxies []substore.Proxy
+	for _, p := range proxiesArray {
+		proxyMap, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		proxies = append(proxies, substore.Proxy(proxyMap))
+	}
+
+	if len(proxies) == 0 {
+		return nil, errors.New("no valid proxies found in YAML")
+	}
+
+	factory := substore.GetDefaultFactory()
+
+	// 根据客户端类型获取Producer
+	producer, err := factory.GetProducer(clientType)
+	if err != nil {
+		return nil, fmt.Errorf("unsupported client type '%s': %w", clientType, err)
+	}
+
+	// 调用Produce方法生成转换后的节点, 这里不处理原substore的internal模式与额外菜蔬
+	result, err := producer.Produce(proxies, "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to produce subscription: %w", err)
+	}
+	switch v := result.(type) {
+	case string:
+		return []byte(v), nil
+	case []byte:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("unexpected result type from producer: %T, expected string or []byte", result)
+	}
 }

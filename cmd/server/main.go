@@ -98,6 +98,7 @@ func main() {
 	mux.Handle("/api/traffic/summary", auth.RequireToken(tokenStore, trafficHandler))
 	mux.Handle("/api/subscriptions", auth.RequireToken(tokenStore, handler.NewSubscriptionListHandler(repo)))
 	mux.Handle("/api/rules/latest", auth.RequireToken(tokenStore, handler.NewRuleMetadataHandler(subscribeDir, repo)))
+	mux.Handle("/api/dns/resolve", auth.RequireToken(tokenStore, handler.NewDNSHandler()))
 	mux.Handle("/api/nodes", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo)))
 	mux.Handle("/api/nodes/", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo)))
 	mux.Handle("/api/subscribe-files", auth.RequireToken(tokenStore, handler.NewSubscribeFilesListHandler(repo)))

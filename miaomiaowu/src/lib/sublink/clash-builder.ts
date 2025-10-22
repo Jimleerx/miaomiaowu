@@ -28,8 +28,31 @@ export class ClashConfigBuilder {
   }
 
   private convertProxies(): void {
-    this.config.proxies = this.proxyConfigs
+    // 重新排序代理节点的字段：name, type, server, port 在最前面
+    this.config.proxies = this.proxyConfigs.map(proxy => this.reorderProxyFields(proxy))
     this.proxies = this.proxyConfigs
+  }
+
+  // 重新排序代理节点字段，将 name, type, server, port 放在最前面
+  private reorderProxyFields(proxy: ProxyConfig): ProxyConfig {
+    const ordered: any = {}
+    const priorityKeys = ['name', 'type', 'server', 'port']
+
+    // 先添加优先字段
+    for (const key of priorityKeys) {
+      if (key in proxy) {
+        ordered[key] = (proxy as any)[key]
+      }
+    }
+
+    // 再添加其他字段
+    for (const [key, value] of Object.entries(proxy)) {
+      if (!priorityKeys.includes(key)) {
+        ordered[key] = value
+      }
+    }
+
+    return ordered as ProxyConfig
   }
   private buildRuleProviders(): void {
     const ruleProviders: Record<string, unknown> = {}

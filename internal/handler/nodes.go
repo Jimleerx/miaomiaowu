@@ -42,7 +42,10 @@ func (h *nodesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleBatchCreate(w, r)
 	case path == "fetch-subscription" && r.Method == http.MethodPost:
 		h.handleFetchSubscription(w, r)
-	case path != "" && path != "batch" && path != "fetch-subscription" && (r.Method == http.MethodPut || r.Method == http.MethodPatch):
+	case strings.HasSuffix(path, "/server") && r.Method == http.MethodPut:
+		idSegment := strings.TrimSuffix(path, "/server")
+		h.handleUpdateServer(w, r, idSegment)
+	case path != "" && path != "batch" && path != "fetch-subscription" && !strings.HasSuffix(path, "/server") && (r.Method == http.MethodPut || r.Method == http.MethodPatch):
 		h.handleUpdate(w, r, path)
 	case path != "" && path != "batch" && path != "fetch-subscription" && r.Method == http.MethodDelete:
 		h.handleDelete(w, r, path)
@@ -216,6 +219,76 @@ func (h *nodesHandler) handleUpdate(w http.ResponseWriter, r *http.Request, idSe
 		existing.Tag = req.Tag
 	}
 	existing.Enabled = req.Enabled
+
+	updated, err := h.repo.UpdateNode(r.Context(), existing)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, storage.ErrNodeNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"node": convertNode(updated),
+	})
+}
+
+func (h *nodesHandler) handleUpdateServer(w http.ResponseWriter, r *http.Request, idSegment string) {
+	username := auth.UsernameFromContext(r.Context())
+	if username == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("用户未认证"))
+		return
+	}
+
+	id, err := strconv.ParseInt(idSegment, 10, 64)
+	if err != nil || id <= 0 {
+		writeBadRequest(w, "无效的节点标识")
+		return
+	}
+
+	existing, err := h.repo.GetNode(r.Context(), id, username)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, storage.ErrNodeNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err)
+		return
+	}
+
+	var req struct {
+		Server string `json:"server"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "请求格式不正确")
+		return
+	}
+
+	if req.Server == "" {
+		writeBadRequest(w, "服务器地址不能为空")
+		return
+	}
+
+	// 更新 ParsedConfig 中的 server 字段
+	var parsedConfig map[string]any
+	if err := json.Unmarshal([]byte(existing.ParsedConfig), &parsedConfig); err == nil {
+		parsedConfig["server"] = req.Server
+		if updatedParsed, err := json.Marshal(parsedConfig); err == nil {
+			existing.ParsedConfig = string(updatedParsed)
+		}
+	}
+
+	// 更新 ClashConfig 中的 server 字段
+	var clashConfig map[string]any
+	if err := json.Unmarshal([]byte(existing.ClashConfig), &clashConfig); err == nil {
+		clashConfig["server"] = req.Server
+		if updatedClash, err := json.Marshal(clashConfig); err == nil {
+			existing.ClashConfig = string(updatedClash)
+		}
+	}
 
 	updated, err := h.repo.UpdateNode(r.Context(), existing)
 	if err != nil {

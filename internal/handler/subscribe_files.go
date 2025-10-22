@@ -355,8 +355,26 @@ func (h *subscribeFilesHandler) handleUpdate(w http.ResponseWriter, r *http.Requ
 	if req.Type != "" {
 		existing.Type = req.Type
 	}
-	if req.Filename != "" {
+
+	// 处理文件名更新
+	oldFilename := existing.Filename
+	needRenameFile := false
+	if req.Filename != "" && req.Filename != existing.Filename {
+		// 验证新文件名
+		ext := filepath.Ext(req.Filename)
+		if ext != ".yaml" && ext != ".yml" {
+			writeError(w, http.StatusBadRequest, errors.New("文件名必须以 .yaml 或 .yml 结尾"))
+			return
+		}
+
+		// 检查新文件名是否已被其他订阅使用
+		if existingFile, err := h.repo.GetSubscribeFileByFilename(r.Context(), req.Filename); err == nil && existingFile.ID != id {
+			writeError(w, http.StatusConflict, errors.New("文件名已被其他订阅使用"))
+			return
+		}
+
 		existing.Filename = req.Filename
+		needRenameFile = true
 	}
 
 	updated, err := h.repo.UpdateSubscribeFile(r.Context(), existing)
@@ -371,6 +389,25 @@ func (h *subscribeFilesHandler) handleUpdate(w http.ResponseWriter, r *http.Requ
 		}
 		writeError(w, http.StatusBadRequest, err)
 		return
+	}
+
+	// 如果文件名发生变化，重命名物理文件
+	if needRenameFile {
+		oldPath := filepath.Join("subscribes", oldFilename)
+		newPath := filepath.Join("subscribes", req.Filename)
+
+		// 检查旧文件是否存在
+		if _, err := os.Stat(oldPath); err == nil {
+			// 重命名文件
+			if err := os.Rename(oldPath, newPath); err != nil {
+				// 重命名失败，回滚数据库更新
+				existing.Filename = oldFilename
+				_, _ = h.repo.UpdateSubscribeFile(r.Context(), existing)
+				writeError(w, http.StatusInternalServerError, errors.New("重命名文件失败: "+err.Error()))
+				return
+			}
+		}
+		// 如果旧文件不存在，只更新数据库记录，不报错
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{

@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
-import { Upload, Download, Plus, Edit } from 'lucide-react'
+import { Upload, Download, Plus, Edit, Settings } from 'lucide-react'
 
 export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
@@ -71,6 +71,8 @@ function SubscribeFilesPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingFile, setEditingFile] = useState<SubscribeFile | null>(null)
+  const [editMetadataDialogOpen, setEditMetadataDialogOpen] = useState(false)
+  const [editingMetadata, setEditingMetadata] = useState<SubscribeFile | null>(null)
 
   // 编辑器状态
   const [editorValue, setEditorValue] = useState('')
@@ -92,6 +94,13 @@ function SubscribeFilesPage() {
     filename: '',
   })
   const [uploadFile, setUploadFile] = useState<File | null>(null)
+
+  // 编辑元数据表单
+  const [metadataForm, setMetadataForm] = useState({
+    name: '',
+    description: '',
+    filename: '',
+  })
 
   // 获取订阅文件列表
   const { data: filesData, isLoading } = useQuery({
@@ -168,6 +177,25 @@ function SubscribeFilesPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || '删除失败')
+    },
+  })
+
+  // 更新订阅元数据
+  const updateMetadataMutation = useMutation({
+    mutationFn: async (payload: { id: number; data: typeof metadataForm }) => {
+      const response = await api.put(`/api/admin/subscribe-files/${payload.id}`, payload.data)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscribe-files'] })
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] })
+      toast.success('订阅信息已更新')
+      setEditMetadataDialogOpen(false)
+      setEditingMetadata(null)
+      setMetadataForm({ name: '', description: '', filename: '' })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '更新失败')
     },
   })
 
@@ -289,6 +317,32 @@ function SubscribeFilesPage() {
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id)
+  }
+
+  const handleEditMetadata = (file: SubscribeFile) => {
+    setEditingMetadata(file)
+    setMetadataForm({
+      name: file.name,
+      description: file.description,
+      filename: file.filename,
+    })
+    setEditMetadataDialogOpen(true)
+  }
+
+  const handleUpdateMetadata = () => {
+    if (!editingMetadata) return
+    if (!metadataForm.name.trim()) {
+      toast.error('请填写订阅名称')
+      return
+    }
+    if (!metadataForm.filename.trim()) {
+      toast.error('请填写文件名')
+      return
+    }
+    updateMetadataMutation.mutate({
+      id: editingMetadata.id,
+      data: metadataForm,
+    })
   }
 
   return (
@@ -498,10 +552,19 @@ function SubscribeFilesPage() {
                             <Button
                               variant='ghost'
                               size='sm'
+                              onClick={() => handleEditMetadata(file)}
+                              disabled={updateMetadataMutation.isPending}
+                            >
+                              <Settings className='mr-1 h-4 w-4' />
+                              编辑信息
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              size='sm'
                               onClick={() => handleEdit(file)}
                             >
                               <Edit className='mr-1 h-4 w-4' />
-                              编辑
+                              编辑内容
                             </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -612,6 +675,72 @@ function SubscribeFilesPage() {
           <DialogFooter className='px-6 pb-6'>
             <Button variant='outline' onClick={() => setEditDialogOpen(false)}>
               关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑订阅信息 Dialog */}
+      <Dialog open={editMetadataDialogOpen} onOpenChange={(open) => {
+        setEditMetadataDialogOpen(open)
+        if (!open) {
+          setEditingMetadata(null)
+          setMetadataForm({ name: '', description: '', filename: '' })
+        }
+      }}>
+        <DialogContent className='sm:max-w-lg'>
+          <DialogHeader>
+            <DialogTitle>编辑订阅信息</DialogTitle>
+            <DialogDescription>
+              修改订阅名称、说明和文件名
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='metadata-name'>订阅名称 *</Label>
+              <Input
+                id='metadata-name'
+                value={metadataForm.name}
+                onChange={(e) => setMetadataForm({ ...metadataForm, name: e.target.value })}
+                placeholder='例如：机场A'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='metadata-description'>说明（可选）</Label>
+              <Textarea
+                id='metadata-description'
+                value={metadataForm.description}
+                onChange={(e) => setMetadataForm({ ...metadataForm, description: e.target.value })}
+                placeholder='订阅说明信息'
+                rows={3}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='metadata-filename'>文件名 *</Label>
+              <Input
+                id='metadata-filename'
+                value={metadataForm.filename}
+                onChange={(e) => setMetadataForm({ ...metadataForm, filename: e.target.value })}
+                placeholder='例如：subscription.yaml'
+              />
+              <p className='text-xs text-muted-foreground'>
+                修改文件名后需确保该文件在 subscribes 目录中存在
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setEditMetadataDialogOpen(false)}
+              disabled={updateMetadataMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleUpdateMetadata}
+              disabled={updateMetadataMutation.isPending}
+            >
+              {updateMetadataMutation.isPending ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>

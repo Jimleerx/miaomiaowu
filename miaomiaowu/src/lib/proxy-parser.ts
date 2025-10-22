@@ -16,7 +16,8 @@ export interface ProxyNode {
   uuid?: string
   method?: string
   cipher?: string
-  [key: string]: unknown
+  [key: string]: unknown,
+  'spider-x'?: string
 }
 
 // Clash 节点格式
@@ -359,6 +360,7 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
         node.sni = queryParams.sni || server
         node.servername = queryParams.sni || server
         node.skipCertVerify = queryParams.allowInsecure === '1'
+        node['spider-x'] = queryParams.spx
 
         // Reality 协议专用参数
         if (queryParams.security === 'reality') {
@@ -505,7 +507,7 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     // 原始缩写参数（已转换为标准格式）
     'pbk', 'sid', 'spx', 'fp',
     // Reality 参数（已转换为 reality-opts）
-    'public-key', 'short-id',
+    'public-key', 'short-id', 'spider-x', '_spider-x',
     // 中间状态参数
     'allowInsecure', 'skipCertVerify',
     'sni', // 已转换为 servername
@@ -586,6 +588,10 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     }
     if (node.sid !== undefined || node['short-id'] !== undefined) {
       realityOpts['short-id'] = (node['short-id'] || node.sid || '') as string
+    }
+    // 添加 spider-x 参数
+    if (node.spx || node['spider-x'] || node['_spider-x']) {
+      realityOpts['spider-x'] = (node['spider-x'] || node['_spider-x'] || node.spx || '') as string
     }
     clash['reality-opts'] = realityOpts
   }
