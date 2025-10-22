@@ -80,14 +80,18 @@ services:
       start_period: 5s
 ```
 
-说明：
+参数说明：
 - `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
-- `volumes:`     这是挂载下面这三个目录到宿主机的，如果你不知道这三个目录是干嘛的，不需要添加
-- `./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
-- `./subscribes:/app/subscribes` 订阅文件存放目录
-- `./rule_templates:/app/rule_templates` 规则模板存放目录
 - `-e JWT_SECRET=your-secret` 可选参数，配置token密钥，建议改成随机字符串
 - 其他环境变量（如 `LOG_LEVEL`）同下文“环境变量”章节，可通过 `-e` 继续添加。
+
+映射目录说明:
+```
+volumes:     #这是挂载下面这三个目录到宿主机的，如果你不知道这三个目录是干嘛的，不需要添加
+  - ./traffic-info-data:/app/data #持久化数据库文件，防止容器重建时数据丢失。
+  - ./subscribes:/app/subscribes #订阅文件存放目录
+  - ./rule_templates:/app/rule_templates #规则模板存放目录
+```
 
 启动服务：
 
@@ -501,7 +505,7 @@ MIT License
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
 
 ## 更新日志
-### v0.0.8 (2025-10-24)
+### v0.0.8 (2025-10-23)
 - 🌗 集成substore订阅转换功能(beta)
 - 🌈 readme移除docker的volume配置，防止小白没有权限启动失败
 - 🌈 新增arm64架构包

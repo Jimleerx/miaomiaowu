@@ -53,8 +53,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS requests and libc for CGO-compiled binary
-RUN apk --no-cache add ca-certificates tzdata libc6-compat
+# Install ca-certificates for HTTPS requests, libc for CGO-compiled binary, and gosu
+RUN apk --no-cache add ca-certificates tzdata libc6-compat gosu
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && \
@@ -63,15 +63,12 @@ RUN addgroup -g 1000 appuser && \
 # Copy binary from builder
 COPY --from=backend-builder /app/server /app/server
 
-# Create necessary directories with proper permissions
-RUN mkdir -p /app/data /app/subscribes && \
-    chown -R appuser:appuser /app
+# Copy entrypoint script
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Volume for persistent data
 VOLUME ["/app/data", "/app/subscribes"]
-
-# Switch to non-root user
-USER appuser
 
 # Expose port
 EXPOSE 8080
@@ -79,6 +76,9 @@ EXPOSE 8080
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the application
 CMD ["/app/server"]
