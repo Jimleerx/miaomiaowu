@@ -19,6 +19,10 @@ RUN npm run build
 # Build stage for backend
 FROM golang:1.24-alpine AS backend-builder
 
+# Declare build arguments for multi-platform support
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /app
 
 # Install build dependencies (gcc and musl-dev needed for CGO)
@@ -37,7 +41,8 @@ COPY . .
 COPY --from=frontend-builder /app/internal/web/dist ./internal/web/dist
 
 # Build backend with optimizations (CGO enabled for SQLite WAL support)
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+# Use TARGETOS and TARGETARCH for multi-platform builds
+RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -trimpath \
     -ldflags="-s -w" \
     -o /app/server \

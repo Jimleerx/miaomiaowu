@@ -501,6 +501,17 @@ MIT License
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
 
 ## 更新日志
+### v0.0.8 (2025-10-24)
+- 🌗 集成substore订阅转换功能(beta)
+- 🌈 readme移除docker的volume配置，防止小白没有权限启动失败
+- 🌈 新增arm64架构包
+- 🌈 节点分组支持链式代理
+- 🌈 支持哪吒V0探针
+- 🌈 节点列表支持转换为IP（v4或v6）
+- 🌈 节点名称与订阅名称、说明、文件名支持修改
+- 🛠️ 添加节点时vless丢失spx参数，hy2丢失sni参数
+- 🛠️ 节点分组删除代理组后，rules中依然使用
+
 ### v0.0.7 (2025-10-21)
 - 🎨 新增手动分组功能，支持拖拽式节点分组
 - 📦 新增节点管理功能

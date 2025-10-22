@@ -6,9 +6,9 @@
 set -e
 
 # 配置
-VERSION="v0.0.7"
+VERSION="v0.0.8"
 GITHUB_REPO="Jimleerx/miaomiaowu"
-BINARY_NAME="traffic-info-linux-amd64"
+BINARY_NAME=""  # 将根据架构自动设置
 INSTALL_DIR="/usr/local/bin"
 SERVICE_NAME="traffic-info"
 DATA_DIR="/var/lib/traffic-info"
@@ -44,10 +44,23 @@ check_root() {
 # 检查系统架构
 check_architecture() {
     ARCH=$(uname -m)
-    if [ "$ARCH" != "x86_64" ]; then
-        echo_error "此脚本仅支持 x86_64 架构，当前架构: $ARCH"
-        exit 1
-    fi
+    echo_info "检测到系统架构: $ARCH"
+
+    case "$ARCH" in
+        x86_64|amd64)
+            BINARY_NAME="traffic-info-linux-amd64"
+            echo_info "使用 AMD64 版本"
+            ;;
+        aarch64|arm64)
+            BINARY_NAME="traffic-info-linux-arm64"
+            echo_info "使用 ARM64 版本"
+            ;;
+        *)
+            echo_error "不支持的架构: $ARCH"
+            echo_error "支持的架构: x86_64 (amd64), aarch64 (arm64)"
+            exit 1
+            ;;
+    esac
 }
 
 # 安装依赖

@@ -3,14 +3,31 @@
 
 set -e
 
-VERSION="v0.0.7"
+VERSION="v0.0.8"
 GITHUB_REPO="Jimleerx/miaomiaowu"
-DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/traffic-info-linux-amd64"
 VERSION_FILE=".version"
+
+# 检测系统架构
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        BINARY_NAME="traffic-info-linux-amd64"
+        ;;
+    aarch64|arm64)
+        BINARY_NAME="traffic-info-linux-arm64"
+        ;;
+    *)
+        echo "❌ 不支持的架构: $ARCH"
+        echo "支持的架构: x86_64 (amd64), aarch64 (arm64)"
+        exit 1
+        ;;
+esac
+
+DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${BINARY_NAME}"
 
 # 安装函数
 install() {
-    echo "正在下载并安装妙妙屋 $VERSION ..."
+    echo "正在下载并安装妙妙屋 $VERSION ($ARCH)..."
 
     # 下载
     wget -q --show-progress "$DOWNLOAD_URL" -O traffic-info
@@ -46,7 +63,7 @@ install() {
 
 # 更新函数
 update() {
-    echo "正在更新妙妙屋..."
+    echo "正在更新妙妙屋 ($ARCH)..."
     echo ""
 
     # 检查是否已安装
@@ -60,7 +77,7 @@ update() {
         CURRENT_VERSION=$(cat "$VERSION_FILE")
         echo "当前版本: $CURRENT_VERSION"
     fi
-    echo "目标版本: $VERSION"
+    echo "目标版本: $VERSION ($ARCH)"
     echo ""
 
     # 查找并停止运行中的进程
