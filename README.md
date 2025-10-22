@@ -24,6 +24,14 @@
 ### 体验demo
 账户/密码: test / test123
 
+## 常见问题
+### docker 启动报错
+failed to initialize traffic repository: enable wal: unable to open database file: out of memory (14)
+
+给映射的目录 chmod -R 777 比如示例的目录
+```
+chmod -R 777 ./data ./subscribes ./rule_templates
+```
 
 ## 安装部署
 
@@ -130,15 +138,6 @@ docker-compose down
 - `/app/rule_templates` - 存储规则文件模板
 
 **重要提示**：请确保定期备份这两个目录的数据。
-
-#### docker 启动报错
-failed to initialize traffic repository: enable wal: unable to open database file: out of memory (14)
-
-给映射的目录 chmod -R 777 比如示例的目录
-```
-chmod -R 777 ./data ./subscribes ./rule_templates
-```
-
 
 ### 方式 2：一键安装（Linux）
 
