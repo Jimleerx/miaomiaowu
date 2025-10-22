@@ -427,6 +427,26 @@ function SubscriptionGeneratorPage() {
         proxies: group.proxies.filter((p): p is string => p !== undefined)
       }))
 
+      // 处理链式代理：给落地节点组中的节点添加 dialer-proxy 参数
+      const landingGroup = proxyGroups.find(g => g.name === '🌄 落地节点')
+      const hasRelayGroup = proxyGroups.some(g => g.name === '🌠 中转节点')
+
+      if (landingGroup && hasRelayGroup && parsedConfig.proxies && Array.isArray(parsedConfig.proxies)) {
+        // 获取落地节点组中的所有节点名称
+        const landingNodeNames = new Set(landingGroup.proxies.filter((p): p is string => p !== undefined))
+
+        // 给这些节点添加 dialer-proxy 参数
+        parsedConfig.proxies = parsedConfig.proxies.map((proxy: any) => {
+          if (landingNodeNames.has(proxy.name)) {
+            return {
+              ...proxy,
+              'dialer-proxy': '🌠 中转节点'
+            }
+          }
+          return proxy
+        })
+      }
+
       // 重新排序 proxies 字段
       if (parsedConfig.proxies && Array.isArray(parsedConfig.proxies)) {
         parsedConfig.proxies = parsedConfig.proxies.map((proxy: any) => reorderProxyFields(proxy))
