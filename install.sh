@@ -10,9 +10,9 @@ VERSION="v0.0.8"
 GITHUB_REPO="Jimleerx/miaomiaowu"
 BINARY_NAME=""  # 将根据架构自动设置
 INSTALL_DIR="/usr/local/bin"
-SERVICE_NAME="traffic-info"
-DATA_DIR="/var/lib/traffic-info"
-CONFIG_DIR="/etc/traffic-info"
+SERVICE_NAME="mmw"
+DATA_DIR="/etc/mmw"
+CONFIG_DIR="/etc/mmw"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -105,10 +105,17 @@ create_directories() {
 create_systemd_service() {
     echo_info "创建 systemd 服务..."
 
-    # 询问端口号
+    # 询问端口号（支持非交互式环境）
     echo ""
-    read -p "请输入端口（默认8080）: " PORT_INPUT
-    PORT_INPUT=${PORT_INPUT:-8080}
+    if [ -t 0 ]; then
+        # 交互式环境，可以读取用户输入
+        read -p "请输入端口（默认8080）: " PORT_INPUT
+        PORT_INPUT=${PORT_INPUT:-8080}
+    else
+        # 非交互式环境（如管道），使用默认值
+        PORT_INPUT=${PORT:-8080}
+        echo_info "使用默认端口: $PORT_INPUT"
+    fi
 
     cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
@@ -223,12 +230,19 @@ update_service() {
     # 保存版本信息
     echo "$VERSION" > "$DATA_DIR/.version"
 
-    # 询问是否修改端口
+    # 询问是否修改端口（支持非交互式环境）
     CURRENT_PORT=$(grep "Environment=\"PORT=" /etc/systemd/system/${SERVICE_NAME}.service 2>/dev/null | sed 's/.*PORT=\([0-9]*\).*/\1/')
     CURRENT_PORT=${CURRENT_PORT:-8080}
     echo ""
-    read -p "请输入端口（当前: $CURRENT_PORT，直接回车保持不变）: " PORT_INPUT
-    PORT_INPUT=${PORT_INPUT:-$CURRENT_PORT}
+    if [ -t 0 ]; then
+        # 交互式环境
+        read -p "请输入端口（当前: $CURRENT_PORT，直接回车保持不变）: " PORT_INPUT
+        PORT_INPUT=${PORT_INPUT:-$CURRENT_PORT}
+    else
+        # 非交互式环境，保持当前端口或使用环境变量
+        PORT_INPUT=${PORT:-$CURRENT_PORT}
+        echo_info "保持端口: $PORT_INPUT"
+    fi
 
     # 更新 systemd 服务文件中的端口
     sed -i "s/Environment=\"PORT=[0-9]*\"/Environment=\"PORT=$PORT_INPUT\"/" /etc/systemd/system/${SERVICE_NAME}.service

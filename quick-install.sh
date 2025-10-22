@@ -41,10 +41,17 @@ install() {
     # 保存版本信息
     echo "$VERSION" > "$VERSION_FILE"
 
-    # 询问端口号
+    # 询问端口号（支持非交互式环境）
     echo ""
-    read -p "请输入端口（默认8080）: " PORT
-    PORT=${PORT:-8080}
+    if [ -t 0 ]; then
+        # 交互式环境
+        read -p "请输入端口（默认8080）: " PORT_INPUT
+        PORT=${PORT_INPUT:-8080}
+    else
+        # 非交互式环境，使用环境变量或默认值
+        PORT=${PORT:-8080}
+        echo "使用端口: $PORT"
+    fi
 
     # 设置环境变量并运行
     export PORT=$PORT
@@ -103,10 +110,17 @@ update() {
     # 保存版本信息
     echo "$VERSION" > "$VERSION_FILE"
 
-    # 询问端口号
+    # 询问端口号（支持非交互式环境）
     echo ""
-    read -p "请输入端口（默认8080）: " PORT
-    PORT=${PORT:-8080}
+    if [ -t 0 ]; then
+        # 交互式环境
+        read -p "请输入端口（默认8080）: " PORT_INPUT
+        PORT=${PORT_INPUT:-8080}
+    else
+        # 非交互式环境，使用环境变量或默认值
+        PORT=${PORT:-8080}
+        echo "使用端口: $PORT"
+    fi
 
     # 设置环境变量并运行
     export PORT=$PORT
