@@ -63,21 +63,31 @@ docker stop traffic-info && docker rm traffic-info
 version: '3.8'
 
 services:
-  miaomiaowu:
+  traffic-info:
     image: ghcr.io/jimleerx/miaomiaowu:latest
-    container_name: miaomiaowu
+    container_name: traffic-info
+    restart: unless-stopped
+
+    environment:
+      - PORT=8080
+      - DATABASE_PATH=/app/data/traffic.db
+      - LOG_LEVEL=info
+
     ports:
       - "8080:8080"
-    environment:
-      - JWT_SECRET=your-custom-secret-key
-      - LOG_LEVEL=info
-    restart: unless-stopped
+
+    volumes:
+      - ./data:/app/data
+      - ./subscribes:/app/subscribes
+      - ./rule_templates:/app/rule_templates
+
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
       interval: 30s
       timeout: 3s
-      retries: 3
       start_period: 5s
+      retries: 3
+
 ```
 
 参数说明：

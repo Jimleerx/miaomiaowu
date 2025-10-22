@@ -3,17 +3,10 @@ version: '3.8'
 services:
   traffic-info:
     image: ghcr.io/jimleerx/miaomiaowu:latest
-    # Or build from source:
-    # build: .
     container_name: traffic-info
     restart: unless-stopped
 
-    # Set PUID and PGID to match your host user
-    # Use `id` command to check your user's UID and GID
-    # This prevents permission issues with mounted volumes
     environment:
-      - PUID=1000  # Replace with your user ID
-      - PGID=1000  # Replace with your group ID
       - PORT=8080
       - DATABASE_PATH=/app/data/traffic.db
       - LOG_LEVEL=info
@@ -22,9 +15,9 @@ services:
       - "8080:8080"
 
     volumes:
-      # Persist database and subscription files
       - ./data:/app/data
       - ./subscribes:/app/subscribes
+      - ./rule_templates:/app/rule_templates
 
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]

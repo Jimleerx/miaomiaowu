@@ -63,9 +63,15 @@ RUN addgroup -g 1000 appuser && \
 # Copy binary from builder
 COPY --from=backend-builder /app/server /app/server
 
+# Copy rule templates directory
+COPY --from=backend-builder /app/rule_templates /app/rule_templates
+
 # Copy entrypoint script
 COPY docker-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Set proper ownership for app files
+RUN chown -R appuser:appuser /app/server /app/rule_templates
 
 # Volume for persistent data
 VOLUME ["/app/data", "/app/subscribes"]

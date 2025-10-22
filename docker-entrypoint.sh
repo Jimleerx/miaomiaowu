@@ -20,11 +20,11 @@ if [ "$PUID" != "1000" ] || [ "$PGID" != "1000" ]; then
     adduser -D -u "$PUID" -G appuser appuser
 fi
 
-# Create and fix permissions for data directories
-mkdir -p /app/data /app/subscribes
+# Create and fix permissions for mounted data directories
+mkdir -p /app/data /app/subscribes /app/rule_templates
 
-echo "Fixing permissions for /app/data and /app/subscribes..."
-chown -R appuser:appuser /app/data /app/subscribes
+echo "Fixing permissions for mounted volumes..."
+chown -R appuser:appuser /app/data /app/subscribes /app/rule_templates
 
 # Use gosu to drop privileges and run the application as appuser
 echo "Starting application as appuser..."
