@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, Download, Loader2, Save, Layers, GripVertical, X } from 'lucide-react'
+import { Copy, Download, Loader2, Save, Layers, GripVertical, X, Activity } from 'lucide-react'
 import { Topbar } from '@/components/layout/topbar'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
@@ -80,6 +80,7 @@ type SavedNode = {
   clash_config: string
   enabled: boolean
   tag: string
+  probe_server: string
   created_at: string
   updated_at: string
 }
@@ -134,7 +135,7 @@ function SubscriptionGeneratorPage() {
   const { data: nodesData } = useQuery({
     queryKey: ['nodes'],
     queryFn: async () => {
-      const response = await api.get('/api/nodes')
+      const response = await api.get('/api/admin/nodes')
       return response.data as { nodes: SavedNode[] }
     },
     enabled: Boolean(auth.accessToken),
@@ -144,7 +145,7 @@ function SubscriptionGeneratorPage() {
   const { data: templatesData } = useQuery({
     queryKey: ['rule-templates'],
     queryFn: async () => {
-      const response = await api.get('/api/rule-templates')
+      const response = await api.get('/api/admin/rule-templates')
       return response.data as { templates: string[] }
     },
     enabled: Boolean(auth.accessToken),
@@ -222,7 +223,7 @@ function SubscriptionGeneratorPage() {
       }
 
       // 读取模板文件
-      const response = await api.get(`/api/rule-templates/${selectedTemplate}`)
+      const response = await api.get(`/api/admin/rule-templates/${selectedTemplate}`)
       const templateContent = response.data.content as string
 
       // 解析模板
@@ -404,7 +405,7 @@ function SubscriptionGeneratorPage() {
 
       // 获取所有可用的代理节点，添加默认的特殊节点
       const allProxies = parsedConfig.proxies?.map((p: any) => p.name) || []
-      const specialNodes = ['⚡ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
+      const specialNodes = ['♻️ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
       const availableNodes = [...specialNodes, ...allProxies]
 
       setProxyGroups(groups)
@@ -798,7 +799,19 @@ function SubscriptionGeneratorPage() {
                             <Badge variant='outline'>{node.protocol.toUpperCase()}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant='secondary' className='text-xs'>{node.tag}</Badge>
+                            <div className='flex flex-wrap gap-1'>
+                              {node.tag && (
+                                <Badge variant='secondary' className='text-xs'>
+                                  {node.tag}
+                                </Badge>
+                              )}
+                              {node.probe_server && (
+                                <Badge variant='secondary' className='text-xs flex items-center gap-1'>
+                                  <Activity className='size-3' />
+                                  {node.probe_server}
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1032,15 +1045,15 @@ function SubscriptionGeneratorPage() {
 
       {/* 手动分组对话框 */}
       <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
-        <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto' style={{ maxWidth: '95vw', width: '95vw' }}>
+        <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '95vw', width: '95vw' }}>
           <DialogHeader>
             <DialogTitle>手动分组节点</DialogTitle>
             <DialogDescription>
               拖拽节点到不同的代理组，自定义每个组的节点列表
             </DialogDescription>
           </DialogHeader>
-          <div className='py-4'>
-            <div className='flex gap-4'>
+          <div className='flex-1 overflow-y-auto py-4'>
+            <div className='flex gap-4 h-full'>
               {/* 左侧：代理组（自适应宽度） */}
               <div className='flex-1 grid gap-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
                 {proxyGroups.map((group) => (
@@ -1096,7 +1109,7 @@ function SubscriptionGeneratorPage() {
                               e.stopPropagation()
                               handleDrop(group.name, idx)
                             }}
-                            className='flex items-center gap-2 p-2 rounded border bg-background hover:bg-accent cursor-move transition-all duration-75 group/item'
+                            className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75 group/item'
                           >
                             <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
                             <span className='text-sm truncate flex-1'>{proxy}</span>
@@ -1129,63 +1142,68 @@ function SubscriptionGeneratorPage() {
               </div>
 
               {/* 分割线 */}
-              <div className='w-px bg-border flex-shrink-0'></div>
+              <div className='w-1 bg-border flex-shrink-0'></div>
 
               {/* 右侧：可用节点 */}
-              <div className='w-64 flex-shrink-0'>
-                <Card
-                  className={`sticky top-4 transition-all duration-75 ${
-                    dragOverGroup === 'available'
-                      ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
-                      : ''
-                  }`}
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    handleDragEnterGroup('available')
-                  }}
-                  onDragLeave={handleDragLeaveGroup}
-                  onDrop={handleDropToAvailable}
-                >
-                  <CardHeader className='pb-3'>
-                    <CardTitle className='text-base'>可用节点</CardTitle>
-                    <CardDescription className='text-xs'>
-                      {availableProxies.length} 个节点
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-1 max-h-[500px] overflow-y-auto'>
-                    {availableProxies.map((proxy, idx) => (
-                      <div
-                        key={`available-${proxy}-${idx}`}
-                        draggable
-                        onDragStart={() => handleDragStart(proxy, null, idx)}
-                        onDragEnd={handleDragEnd}
-                        className='flex items-center gap-2 p-2 rounded border bg-background hover:bg-accent cursor-move transition-all duration-75'
-                      >
-                        <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                        <span className='text-sm truncate flex-1'>{proxy}</span>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+              <div className='w-64 flex-shrink-0 flex flex-col h-full'>
+                <div className='flex-1 overflow-y-auto min-h-0'>
+                  <Card
+                    className={`transition-all duration-75 ${
+                      dragOverGroup === 'available'
+                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
+                        : ''
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      handleDragEnterGroup('available')
+                    }}
+                    onDragLeave={handleDragLeaveGroup}
+                    onDrop={handleDropToAvailable}
+                  >
+                    <CardHeader className='pb-3'>
+                      <CardTitle className='text-base'>可用节点</CardTitle>
+                      <CardDescription className='text-xs'>
+                        {availableProxies.length} 个节点
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className='space-y-1'>
+                      {availableProxies.map((proxy, idx) => (
+                        <div
+                          key={`available-${proxy}-${idx}`}
+                          draggable
+                          onDragStart={() => handleDragStart(proxy, null, idx)}
+                          onDragEnd={handleDragEnd}
+                          className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75'
+                        >
+                          <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                          <span className='text-sm truncate flex-1'>{proxy}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
 
-                {/* 配置链式代理按钮 */}
-                <Button
-                  variant='outline'
-                  className='w-full mt-4'
-                  onClick={handleConfigureChainProxy}
-                >
-                  <Layers className='mr-2 h-4 w-4' />
-                  配置链式代理
-                </Button>
+                {/* 按钮区域 - 固定在底部 */}
+                <div className='flex-shrink-0 pt-4 bg-background'>
+                  {/* 配置链式代理按钮 */}
+                  <Button
+                    variant='outline'
+                    className='w-full'
+                    onClick={handleConfigureChainProxy}
+                  >
+                    <Layers className='mr-2 h-4 w-4' />
+                    配置链式代理
+                  </Button>
 
-                {/* 操作按钮 */}
-                <div className='flex gap-2 mt-4'>
-                  <Button variant='outline' onClick={() => setGroupDialogOpen(false)} className='flex-1'>
-                    取消
-                  </Button>
-                  <Button onClick={handleApplyGrouping} className='flex-1'>
-                    应用分组
-                  </Button>
+                  {/* 操作按钮 */}
+                  <div className='flex gap-2 mt-4'>
+                    <Button variant='outline' onClick={() => setGroupDialogOpen(false)} className='flex-1'>
+                      取消
+                    </Button>
+                    <Button onClick={handleApplyGrouping} className='flex-1'>
+                      应用分组
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

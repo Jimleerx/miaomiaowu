@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useMemo } from 'react'
-import { createFileRoute, redirect, Link } from '@tanstack/react-router'
+import { createFileRoute, redirect, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { load as parseYAML } from 'js-yaml'
 import { toast } from 'sonner'
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
-import { Upload, Download, Plus, Edit, Settings } from 'lucide-react'
+import { Upload, Download, Plus, Edit, Settings, FileText } from 'lucide-react'
 
 export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
@@ -54,6 +54,7 @@ const TYPE_LABELS = {
 function SubscribeFilesPage() {
   const { auth } = useAuthStore()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   // 日期格式化器
   const dateFormatter = useMemo(
@@ -204,7 +205,7 @@ function SubscribeFilesPage() {
     queryKey: ['rule-file', editingFile?.filename],
     queryFn: async () => {
       if (!editingFile) return null
-      const response = await api.get(`/api/rules/${encodeURIComponent(editingFile.filename)}`)
+      const response = await api.get(`/api/admin/rules/${encodeURIComponent(editingFile.filename)}`)
       return response.data as {
         name: string
         content: string
@@ -218,7 +219,7 @@ function SubscribeFilesPage() {
   // 保存文件
   const saveMutation = useMutation({
     mutationFn: async (payload: { file: string; content: string }) => {
-      const response = await api.put(`/api/rules/${encodeURIComponent(payload.file)}`, {
+      const response = await api.put(`/api/admin/rules/${encodeURIComponent(payload.file)}`, {
         content: payload.content,
       })
       return response.data as { version: number }
@@ -486,6 +487,12 @@ function SubscribeFilesPage() {
               </DialogContent>
             </Dialog>
 
+            {/* 生成订阅 */}
+            <Button variant='outline' onClick={() => navigate({ to: '/generator' })}>
+              <FileText className='mr-2 h-4 w-4' />
+              生成订阅
+            </Button>
+
             {/* 自定义代理组 - 保留入口 */}
             {/* <Link to='/subscribe-files/custom'>
               <Button>
@@ -564,7 +571,7 @@ function SubscribeFilesPage() {
                               onClick={() => handleEdit(file)}
                             >
                               <Edit className='mr-1 h-4 w-4' />
-                              编辑内容
+                              编辑配置
                             </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>

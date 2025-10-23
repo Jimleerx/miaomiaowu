@@ -16,7 +16,7 @@ func NewRuleTemplatesHandler() *RuleTemplatesHandler {
 
 func (h *RuleTemplatesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Remove /api/rule-templates prefix
-	path := strings.TrimPrefix(r.URL.Path, "/api/rule-templates")
+	path := strings.TrimPrefix(r.URL.Path, "/api/admin/rule-templates")
 
 	switch {
 	case path == "" || path == "/":

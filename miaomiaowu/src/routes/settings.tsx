@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -190,80 +189,81 @@ function SettingsPage() {
       <main className='mx-auto w-full max-w-4xl px-4 py-8 sm:px-6'>
         <section className='space-y-2'>
           <h1 className='text-3xl font-semibold tracking-tight'>个人设置</h1>
-          <p className='text-muted-foreground'>更新个人信息、查看订阅 Token，并可在此修改密码。</p>
         </section>
 
         <div className='mt-8 grid gap-6 lg:grid-cols-2'>
           {/* 左侧：个人资料 */}
-          <Card>
-            <CardHeader>
-              <CardTitle>个人资料</CardTitle>
-              <CardDescription>修改用户名、昵称、邮箱和头像链接。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className='space-y-5' onSubmit={submitProfile}>
-                <div className='flex items-center gap-4'>
-                  <Avatar className='size-12'>
-                    <AvatarImage src={avatarSrc} alt={displayName} />
-                    <AvatarFallback>{avatarFallback}</AvatarFallback>
-                  </Avatar>
-                  <div className='text-sm text-muted-foreground'>
-                    {profile?.is_admin ? '管理员头像默认根据角色区分，设置自定义链接将覆盖默认头像。' : '支持使用任意公开可访问的图片链接。'}
+          <div className='space-y-6'>
+            <Card>
+              <CardHeader>
+                <CardTitle>个人资料</CardTitle>
+                <CardDescription>修改用户名、昵称、邮箱和头像链接。</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className='space-y-5' onSubmit={submitProfile}>
+                  <div className='flex items-center gap-4'>
+                    <Avatar className='size-12'>
+                      <AvatarImage src={avatarSrc} alt={displayName} />
+                      <AvatarFallback>{avatarFallback}</AvatarFallback>
+                    </Avatar>
+                    <div className='text-sm text-muted-foreground'>
+                      {profile?.is_admin ? '管理员头像默认根据角色区分，设置自定义链接将覆盖默认头像。' : '支持使用任意公开可访问的图片链接。'}
+                    </div>
                   </div>
-                </div>
 
-                <div className='space-y-2'>
-                  <Label htmlFor='username'>用户名</Label>
-                  <Input
-                    id='username'
-                    placeholder='用于登录的用户名'
-                    disabled={loadingProfile || profile?.is_admin}
-                    {...profileForm.register('username', { required: true })}
-                  />
-                  {profile?.is_admin ? (
-                    <p className='text-xs text-muted-foreground'>管理员用户名暂不支持修改。</p>
-                  ) : null}
-                </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='username'>用户名</Label>
+                    <Input
+                      id='username'
+                      placeholder='用于登录的用户名'
+                      disabled={loadingProfile || profile?.is_admin}
+                      {...profileForm.register('username', { required: true })}
+                    />
+                    {profile?.is_admin ? (
+                      <p className='text-xs text-muted-foreground'>管理员用户名暂不支持修改。</p>
+                    ) : null}
+                  </div>
 
-                <div className='space-y-2'>
-                  <Label htmlFor='nickname'>昵称</Label>
-                  <Input
-                    id='nickname'
-                    placeholder='用于展示的昵称'
-                    disabled={loadingProfile}
-                    {...profileForm.register('nickname')}
-                  />
-                </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='nickname'>昵称</Label>
+                    <Input
+                      id='nickname'
+                      placeholder='用于展示的昵称'
+                      disabled={loadingProfile}
+                      {...profileForm.register('nickname')}
+                    />
+                  </div>
 
-                <div className='space-y-2'>
-                  <Label htmlFor='email'>邮箱</Label>
-                  <Input
-                    id='email'
-                    type='email'
-                    placeholder='用于接收通知 (可选)'
-                    disabled={loadingProfile}
-                    {...profileForm.register('email')}
-                  />
-                </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='email'>邮箱 (暂不可用)</Label>
+                    <Input
+                      id='email'
+                      type='email'
+                      placeholder='用于接收通知 (可选)'
+                      disabled={loadingProfile}
+                      {...profileForm.register('email')}
+                    />
+                  </div>
 
-                <div className='space-y-2'>
-                  <Label htmlFor='avatar_url'>头像链接</Label>
-                  <Input
-                    id='avatar_url'
-                    placeholder='https://example.com/avatar.png'
-                    disabled={loadingProfile}
-                    {...profileForm.register('avatar_url')}
-                  />
-                </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='avatar_url'>头像链接</Label>
+                    <Input
+                      id='avatar_url'
+                      placeholder='https://example.com/avatar.png'
+                      disabled={loadingProfile}
+                      {...profileForm.register('avatar_url')}
+                    />
+                  </div>
 
-                <Button type='submit' className='w-full' disabled={updateProfileMutation.isPending}>
-                  {updateProfileMutation.isPending ? '保存中…' : '保存变更'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+                  <Button type='submit' className='w-full' disabled={updateProfileMutation.isPending}>
+                    {updateProfileMutation.isPending ? '保存中…' : '保存变更'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
 
-          {/* 右侧：修改密码和订阅 Token */}
+          {/* 右侧：修改密码和订阅Token */}
           <div className='space-y-6'>
             <Card>
               <CardHeader>
@@ -316,7 +316,7 @@ function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>订阅 Token</CardTitle>
-                <CardDescription>Token 用于客户端订阅，请妥善保管。</CardDescription>
+                <CardDescription><p className='mt-2 text-sm font-semibold text-destructive'>token用于客户端订阅，发生泄露后重置token只会影响更新订阅，为防止盗用，还需要修改服务器各个节点的鉴权凭证。</p></CardDescription>
               </CardHeader>
               <CardContent className='space-y-4'>
                 <div className='font-mono text-xs sm:text-sm break-all rounded-md border bg-muted/40 p-3 shadow-inner'>

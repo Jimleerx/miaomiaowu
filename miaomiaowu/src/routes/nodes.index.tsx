@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { parseProxyUrl, toClashProxy, type ProxyNode, type ClashProxy } from '@/lib/proxy-parser'
-import { Check, Pencil, X, Undo2 } from 'lucide-react'
+import { Check, Pencil, X, Undo2, Activity } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import IpIcon from '@/assets/icons/ip.svg'
 
@@ -41,6 +41,8 @@ type ParsedNode = {
   clash_config: string
   enabled: boolean
   tag: string
+  original_server: string
+  probe_server: string
   created_at: string
   updated_at: string
 }
@@ -53,6 +55,10 @@ type TempNode = {
   clash: ClashProxy | null
   enabled: boolean
   originalServer?: string // 保存原始服务器地址，用于回退
+  tag?: string
+  isSaved?: boolean
+  dbId?: number
+  dbNode?: ParsedNode
 }
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -72,12 +78,15 @@ const PROTOCOLS = ['vmess', 'vless', 'trojan', 'ss', 'socks5', 'hysteria', 'hyst
 function isIpAddress(hostname: string): boolean {
   if (!hostname) return false
 
+  // 去除IPv6地址的方括号（如 [2a03:4000:6:d221::1]）
+  const cleanHostname = hostname.replace(/^\[|\]$/g, '')
+
   // IPv4正则
   const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/
-  // IPv6正则（简化版）
+  // IPv6正则（简化版，匹配标准IPv6格式）
   const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/
 
-  return ipv4Regex.test(hostname) || ipv6Regex.test(hostname)
+  return ipv4Regex.test(cleanHostname) || ipv6Regex.test(cleanHostname)
 }
 
 function NodesPage() {
@@ -92,12 +101,48 @@ function NodesPage() {
   const [editingNode, setEditingNode] = useState<{ id: string; value: string } | null>(null)
   const [resolvingIpFor, setResolvingIpFor] = useState<string | null>(null) // 正在解析IP的节点ID
   const [ipMenuState, setIpMenuState] = useState<{ nodeId: string; ips: string[] } | null>(null) // IP选择菜单状态
+  const [probeBindingDialogOpen, setProbeBindingDialogOpen] = useState(false)
+  const [selectedNodeForProbe, setSelectedNodeForProbe] = useState<ParsedNode | null>(null)
+
+  // 获取用户配置
+  const { data: userConfig } = useQuery({
+    queryKey: ['user-config'],
+    queryFn: async () => {
+      const response = await api.get('/api/user/config')
+      return response.data as {
+        force_sync_external: boolean
+        match_rule: string
+        cache_expire_minutes: number
+        sync_traffic: boolean
+        enable_probe_binding: boolean
+      }
+    },
+    enabled: Boolean(auth.accessToken),
+  })
+
+  // 获取探针服务器列表
+  const { data: probeConfigResponse, refetch: refetchProbeConfig } = useQuery({
+    queryKey: ['probe-config'],
+    queryFn: async () => {
+      const response = await api.get('/api/admin/probe-config')
+      return response.data as {
+        config: {
+          probe_type: string
+          address: string
+          servers: Array<{ id: number; name: string; server_id: string }>
+        }
+      }
+    },
+    enabled: false, // 手动触发，不自动执行
+  })
+
+  const probeConfig = probeConfigResponse?.config
 
   // 获取已保存的节点
   const { data: nodesData } = useQuery({
     queryKey: ['nodes'],
     queryFn: async () => {
-      const response = await api.get('/api/nodes')
+      const response = await api.get('/api/admin/nodes')
       return response.data as { nodes: ParsedNode[] }
     },
     enabled: Boolean(auth.accessToken),
@@ -136,7 +181,7 @@ function NodesPage() {
       }
       const updatedParsedConfig = updateConfigName(target.parsed_config, name)
       const updatedClashConfig = updateConfigName(target.clash_config, name)
-      const response = await api.put(`/api/nodes/${id}`, {
+      const response = await api.put(`/api/admin/nodes/${id}`, {
         raw_url: target.raw_url,
         node_name: name,
         protocol: target.protocol,
@@ -172,7 +217,7 @@ function NodesPage() {
   // 更新节点服务器地址
   const updateNodeServerMutation = useMutation({
     mutationFn: async (payload: { nodeId: number; server: string }) => {
-      const response = await api.put(`/api/nodes/${payload.nodeId}/server`, { server: payload.server })
+      const response = await api.put(`/api/admin/nodes/${payload.nodeId}/server`, { server: payload.server })
       return response.data
     },
     onSuccess: () => {
@@ -184,6 +229,40 @@ function NodesPage() {
     onError: (error: any) => {
       toast.error(error.response?.data?.error || '服务器地址更新失败')
       setResolvingIpFor(null)
+    },
+  })
+
+  // 恢复节点原始域名
+  const restoreNodeServerMutation = useMutation({
+    mutationFn: async (nodeId: number) => {
+      const response = await api.put(`/api/admin/nodes/${nodeId}/restore-server`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      toast.success('已恢复原始域名')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '恢复原始域名失败')
+    },
+  })
+
+  // 更新节点探针绑定
+  const updateProbeBindingMutation = useMutation({
+    mutationFn: async (payload: { nodeId: number; probeServer: string }) => {
+      const response = await api.put(`/api/admin/nodes/${payload.nodeId}/probe-binding`, {
+        probe_server: payload.probeServer
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      toast.success('探针绑定已更新')
+      setProbeBindingDialogOpen(false)
+      setSelectedNodeForProbe(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '探针绑定更新失败')
     },
   })
 
@@ -284,7 +363,7 @@ function NodesPage() {
         tag: tag,
       }))
 
-      const response = await api.post('/api/nodes/batch', { nodes: payload })
+      const response = await api.post('/api/admin/nodes/batch', { nodes: payload })
       return response.data
     },
     onSuccess: () => {
@@ -304,7 +383,7 @@ function NodesPage() {
       const node = savedNodes.find(n => n.id === id)
       if (!node) return
 
-      const response = await api.put(`/api/nodes/${id}`, {
+      const response = await api.put(`/api/admin/nodes/${id}`, {
         raw_url: node.raw_url,
         node_name: node.node_name,
         protocol: node.protocol,
@@ -325,7 +404,7 @@ function NodesPage() {
   // 删除节点
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/api/nodes/${id}`)
+      await api.delete(`/api/admin/nodes/${id}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] })
@@ -339,7 +418,7 @@ function NodesPage() {
   // 清空所有节点
   const clearAllMutation = useMutation({
     mutationFn: async () => {
-      await api.post('/api/nodes/clear')
+      await api.post('/api/admin/nodes/clear')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] })
@@ -353,10 +432,10 @@ function NodesPage() {
   // 从订阅获取节点
   const fetchSubscriptionMutation = useMutation({
     mutationFn: async (url: string) => {
-      const response = await api.post('/api/nodes/fetch-subscription', { url })
+      const response = await api.post('/api/admin/nodes/fetch-subscription', { url })
       return response.data as { proxies: ClashProxy[]; count: number }
     },
-    onSuccess: (data) => {
+    onSuccess: async (data, url) => {
       // 将Clash节点转换为TempNode格式
       const parsed: TempNode[] = data.proxies.map((clashNode) => {
         // Clash节点已经是标准格式，直接作为ProxyNode和ClashProxy使用
@@ -384,6 +463,21 @@ function NodesPage() {
       setTempNodes(parsed)
       setCurrentTag('subscription') // 订阅导入
       toast.success(`成功导入 ${data.count} 个节点`)
+
+      // 保存外部订阅链接
+      try {
+        // 从 URL 中提取名称（使用域名或者最后一部分）
+        const urlObj = new URL(url)
+        const name = urlObj.hostname || '外部订阅'
+
+        await api.post('/api/user/external-subscriptions', {
+          name: name,
+          url: url,
+        })
+      } catch (error) {
+        // 如果保存失败（比如已经存在），忽略错误
+        console.log('保存外部订阅链接失败（可能已存在）:', error)
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || '获取订阅失败')
@@ -523,6 +617,7 @@ function NodesPage() {
         tag: n.tag || '手动输入',
         isSaved: true,
         dbId: n.id,
+        dbNode: n,
       }
     })
 
@@ -582,7 +677,7 @@ function NodesPage() {
           <div>
             <h1 className='text-3xl font-semibold tracking-tight'>节点管理</h1>
             <p className='text-muted-foreground mt-2'>
-              输入代理节点信息，每行一个节点，支持 VMess、VLESS、Trojan、Shadowsocks、Hysteria、Socks、Shadowsocks 协议。
+              输入代理节点信息，每行一个节点，支持 VMess、VLESS、Trojan、Shadowsocks、Hysteria、Socks、Shadowsocks、TUIC 协议。
             </p>
           </div>
 
@@ -836,11 +931,19 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                               )}
                             </TableCell>
                             <TableCell>
-                              {node.isSaved && node.tag && (
-                                <Badge variant='outline' className='text-xs'>
-                                  {node.tag}
-                                </Badge>
-                              )}
+                              <div className='flex flex-wrap gap-1'>
+                                {node.isSaved && node.tag && (
+                                  <Badge variant='secondary' className='text-xs'>
+                                    {node.tag}
+                                  </Badge>
+                                )}
+                                {node.isSaved && node.dbNode?.probe_server && (
+                                  <Badge variant='secondary' className='text-xs flex items-center gap-1'>
+                                    <Activity className='size-3' />
+                                    {node.dbNode.probe_server}
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className='text-sm text-muted-foreground'>
@@ -930,6 +1033,33 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                         )
                                       })()
                                     )}
+                                    {node.isSaved && node.dbNode?.original_server && (
+                                      <Button
+                                        variant='ghost'
+                                        size='sm'
+                                        className='size-6 p-0 border border-primary/50 hover:border-primary ml-1'
+                                        title='恢复原始域名'
+                                        disabled={restoreNodeServerMutation.isPending}
+                                        onClick={() => restoreNodeServerMutation.mutate(node.dbId)}
+                                      >
+                                        <Undo2 className='size-3' />
+                                      </Button>
+                                    )}
+                                    {userConfig?.enable_probe_binding && node.isSaved && node.dbNode && (
+                                      <Button
+                                        variant='ghost'
+                                        size='sm'
+                                        className='size-6 p-0 border border-primary/50 hover:border-primary ml-1'
+                                        title={node.dbNode.probe_server ? `当前绑定: ${node.dbNode.probe_server}` : '绑定探针服务器'}
+                                        onClick={() => {
+                                          setSelectedNodeForProbe(node.dbNode!)
+                                          setProbeBindingDialogOpen(true)
+                                          refetchProbeConfig() // 打开对话框时查询探针配置
+                                        }}
+                                      >
+                                        <Activity className={`size-4 ${node.dbNode.probe_server ? 'text-green-600' : ''}`} />
+                                      </Button>
+                                    )}
                                   </div>
                                 ) : (
                                   '-'
@@ -1018,6 +1148,70 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
           )}
         </section>
       </main>
+
+      {/* 探针绑定对话框 */}
+      <Dialog open={probeBindingDialogOpen} onOpenChange={setProbeBindingDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>绑定探针服务器</DialogTitle>
+            <DialogDescription>
+              为节点 "{selectedNodeForProbe?.node_name}" 选择要绑定的探针服务器
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            {probeConfig?.servers && probeConfig.servers.length > 0 ? (
+              <div className='space-y-2'>
+                {probeConfig.servers.map((server) => (
+                  <Button
+                    key={server.id}
+                    variant={selectedNodeForProbe?.probe_server === server.name ? 'default' : 'outline'}
+                    className='w-full justify-start'
+                    onClick={() => {
+                      if (selectedNodeForProbe) {
+                        updateProbeBindingMutation.mutate({
+                          nodeId: selectedNodeForProbe.id,
+                          probeServer: server.name
+                        })
+                      }
+                    }}
+                    disabled={updateProbeBindingMutation.isPending}
+                  >
+                    <div className='flex items-center gap-2'>
+                      <Activity className='size-4' />
+                      <div className='text-left'>
+                        <div className='font-medium'>{server.name}</div>
+                        <div className='text-xs text-muted-foreground'>ID: {server.server_id}</div>
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+                {selectedNodeForProbe?.probe_server && (
+                  <Button
+                    variant='ghost'
+                    className='w-full'
+                    onClick={() => {
+                      if (selectedNodeForProbe) {
+                        updateProbeBindingMutation.mutate({
+                          nodeId: selectedNodeForProbe.id,
+                          probeServer: ''
+                        })
+                      }
+                    }}
+                    disabled={updateProbeBindingMutation.isPending}
+                  >
+                    <X className='size-4 mr-2' />
+                    取消绑定
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className='text-center text-sm text-muted-foreground py-8'>
+                暂无可用的探针服务器
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

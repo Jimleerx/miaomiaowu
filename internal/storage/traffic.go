@@ -141,16 +141,19 @@ func scanProbeServer(scanner rowScanner) (ProbeServer, error) {
 }
 
 var (
-	ErrTokenNotFound         = errors.New("token not found")
-	ErrUserNotFound          = errors.New("user not found")
-	ErrUserExists            = errors.New("user already exists")
-	ErrRuleVersionNotFound   = errors.New("rule version not found")
-	ErrSubscriptionNotFound  = errors.New("subscription link not found")
-	ErrSubscriptionExists    = errors.New("subscription link already exists")
-	ErrProbeConfigNotFound   = errors.New("probe configuration not found")
-	ErrNodeNotFound          = errors.New("node not found")
-	ErrSubscribeFileNotFound = errors.New("subscribe file not found")
-	ErrSubscribeFileExists   = errors.New("subscribe file already exists")
+	ErrTokenNotFound                = errors.New("token not found")
+	ErrUserNotFound                 = errors.New("user not found")
+	ErrUserExists                   = errors.New("user already exists")
+	ErrRuleVersionNotFound          = errors.New("rule version not found")
+	ErrSubscriptionNotFound         = errors.New("subscription link not found")
+	ErrSubscriptionExists           = errors.New("subscription link already exists")
+	ErrProbeConfigNotFound          = errors.New("probe configuration not found")
+	ErrNodeNotFound                 = errors.New("node not found")
+	ErrSubscribeFileNotFound        = errors.New("subscribe file not found")
+	ErrSubscribeFileExists          = errors.New("subscribe file already exists")
+	ErrUserSettingsNotFound         = errors.New("user settings not found")
+	ErrExternalSubscriptionNotFound = errors.New("external subscription not found")
+	ErrExternalSubscriptionExists   = errors.New("external subscription already exists")
 )
 
 var (
@@ -200,17 +203,19 @@ type ProbeServer struct {
 
 // Node represents a proxy node stored in the database.
 type Node struct {
-	ID           int64
-	Username     string
-	RawURL       string
-	NodeName     string
-	Protocol     string
-	ParsedConfig string
-	ClashConfig  string
-	Enabled      bool
-	Tag          string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID             int64
+	Username       string
+	RawURL         string
+	NodeName       string
+	Protocol       string
+	ParsedConfig   string
+	ClashConfig    string
+	Enabled        bool
+	Tag            string
+	OriginalServer string
+	ProbeServer    string // Probe server name for binding
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // SubscribeFile represents a subscription file configuration.
@@ -221,6 +226,34 @@ type SubscribeFile struct {
 	URL         string
 	Type        string
 	Filename    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// UserSettings represents user-specific configuration.
+type UserSettings struct {
+	Username            string
+	ForceSyncExternal   bool
+	MatchRule           string // "node_name" or "server_port"
+	CacheExpireMinutes  int    // Cache expiration time in minutes
+	SyncTraffic         bool   // Sync traffic info from external subscriptions
+	EnableProbeBinding  bool   // Enable probe server binding for nodes
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+// ExternalSubscription represents an external subscription URL imported by user.
+type ExternalSubscription struct {
+	ID          int64
+	Username    string
+	Name        string
+	URL         string
+	NodeCount   int
+	LastSyncAt  *time.Time
+	Upload      int64  // 已上传流量（字节）
+	Download    int64  // 已下载流量（字节）
+	Total       int64  // 总流量（字节）
+	Expire      *time.Time // 过期时间
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -469,6 +502,16 @@ CREATE INDEX IF NOT EXISTS idx_nodes_enabled ON nodes(enabled);
 		return err
 	}
 
+	// Add original_server column to existing nodes table if it doesn't exist
+	if err := r.ensureNodeColumn("original_server", "TEXT"); err != nil {
+		return err
+	}
+
+	// Add probe_server column to existing nodes table if it doesn't exist
+	if err := r.ensureNodeColumn("probe_server", "TEXT"); err != nil {
+		return err
+	}
+
 	// Create tag index after ensuring column exists
 	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_nodes_tag ON nodes(tag);`); err != nil {
 		return fmt.Errorf("create tag index: %w", err)
@@ -510,6 +553,75 @@ CREATE INDEX IF NOT EXISTS idx_user_subscriptions_subscription_id ON user_subscr
 
 	if _, err := r.db.Exec(userSubscriptionsSchema); err != nil {
 		return fmt.Errorf("migrate user_subscriptions: %w", err)
+	}
+
+	const userSettingsSchema = `
+CREATE TABLE IF NOT EXISTS user_settings (
+    username TEXT PRIMARY KEY,
+    force_sync_external INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(username) REFERENCES users(username) ON DELETE CASCADE
+);
+`
+
+	if _, err := r.db.Exec(userSettingsSchema); err != nil {
+		return fmt.Errorf("migrate user_settings: %w", err)
+	}
+
+	// Add match_rule column to user_settings table if it doesn't exist
+	if err := r.ensureUserSettingsColumn("match_rule", "TEXT NOT NULL DEFAULT 'node_name'"); err != nil {
+		return err
+	}
+
+	// Add cache_expire_minutes column to user_settings table if it doesn't exist
+	if err := r.ensureUserSettingsColumn("cache_expire_minutes", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+
+	// Add sync_traffic column to user_settings table if it doesn't exist
+	if err := r.ensureUserSettingsColumn("sync_traffic", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+
+	// Add enable_probe_binding column to user_settings table if it doesn't exist
+	if err := r.ensureUserSettingsColumn("enable_probe_binding", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+
+	const externalSubscriptionsSchema = `
+CREATE TABLE IF NOT EXISTS external_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    last_sync_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(username) REFERENCES users(username) ON DELETE CASCADE,
+    UNIQUE(username, url)
+);
+CREATE INDEX IF NOT EXISTS idx_external_subscriptions_username ON external_subscriptions(username);
+CREATE INDEX IF NOT EXISTS idx_external_subscriptions_url ON external_subscriptions(url);
+`
+
+	if _, err := r.db.Exec(externalSubscriptionsSchema); err != nil {
+		return fmt.Errorf("migrate external_subscriptions: %w", err)
+	}
+
+	// Add traffic fields to external_subscriptions table
+	if err := r.ensureExternalSubscriptionColumn("upload", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureExternalSubscriptionColumn("download", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureExternalSubscriptionColumn("total", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureExternalSubscriptionColumn("expire", "TIMESTAMP"); err != nil {
+		return err
 	}
 
 	return nil
@@ -1018,6 +1130,70 @@ func (r *TrafficRepository) ensureNodeColumn(name, definition string) error {
 	}
 
 	alter := fmt.Sprintf("ALTER TABLE nodes ADD COLUMN %s %s", name, definition)
+	if _, err := r.db.Exec(alter); err != nil {
+		return fmt.Errorf("add column %s: %w", name, err)
+	}
+
+	return nil
+}
+
+func (r *TrafficRepository) ensureUserSettingsColumn(name, definition string) error {
+	rows, err := r.db.Query(`PRAGMA table_info(user_settings)`)
+	if err != nil {
+		return fmt.Errorf("user_settings table info: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			colName    string
+			colType    string
+			notNull    int
+			defaultVal sql.NullString
+			pk         int
+		)
+		if err := rows.Scan(&cid, &colName, &colType, &notNull, &defaultVal, &pk); err != nil {
+			return fmt.Errorf("scan table info: %w", err)
+		}
+		if strings.EqualFold(colName, name) {
+			return nil
+		}
+	}
+
+	alter := fmt.Sprintf("ALTER TABLE user_settings ADD COLUMN %s %s", name, definition)
+	if _, err := r.db.Exec(alter); err != nil {
+		return fmt.Errorf("add column %s: %w", name, err)
+	}
+
+	return nil
+}
+
+func (r *TrafficRepository) ensureExternalSubscriptionColumn(name, definition string) error {
+	rows, err := r.db.Query(`PRAGMA table_info(external_subscriptions)`)
+	if err != nil {
+		return fmt.Errorf("external_subscriptions table info: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			colName    string
+			colType    string
+			notNull    int
+			defaultVal sql.NullString
+			pk         int
+		)
+		if err := rows.Scan(&cid, &colName, &colType, &notNull, &defaultVal, &pk); err != nil {
+			return fmt.Errorf("scan table info: %w", err)
+		}
+		if strings.EqualFold(colName, name) {
+			return nil
+		}
+	}
+
+	alter := fmt.Sprintf("ALTER TABLE external_subscriptions ADD COLUMN %s %s", name, definition)
 	if _, err := r.db.Exec(alter); err != nil {
 		return fmt.Errorf("add column %s: %w", name, err)
 	}
@@ -1937,4 +2113,276 @@ func (r *TrafficRepository) GetUserSubscriptions(ctx context.Context, username s
 	}
 
 	return subscriptions, nil
+}
+
+// GetUserSettings retrieves user settings for a given username.
+func (r *TrafficRepository) GetUserSettings(ctx context.Context, username string) (UserSettings, error) {
+	var settings UserSettings
+	if r == nil || r.db == nil {
+		return settings, errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return settings, errors.New("username is required")
+	}
+
+	const stmt = `SELECT username, force_sync_external, COALESCE(match_rule, 'node_name'), COALESCE(cache_expire_minutes, 0), COALESCE(sync_traffic, 0), COALESCE(enable_probe_binding, 0), created_at, updated_at FROM user_settings WHERE username = ? LIMIT 1`
+	var forceSyncInt, syncTrafficInt, enableProbeBindingInt int
+	err := r.db.QueryRowContext(ctx, stmt, username).Scan(&settings.Username, &forceSyncInt, &settings.MatchRule, &settings.CacheExpireMinutes, &syncTrafficInt, &enableProbeBindingInt, &settings.CreatedAt, &settings.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return settings, ErrUserSettingsNotFound
+		}
+		return settings, fmt.Errorf("get user settings: %w", err)
+	}
+
+	settings.ForceSyncExternal = forceSyncInt == 1
+	settings.SyncTraffic = syncTrafficInt == 1
+	settings.EnableProbeBinding = enableProbeBindingInt == 1
+
+	return settings, nil
+}
+
+// UpsertUserSettings creates or updates user settings.
+func (r *TrafficRepository) UpsertUserSettings(ctx context.Context, settings UserSettings) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	username := strings.TrimSpace(settings.Username)
+	if username == "" {
+		return errors.New("username is required")
+	}
+
+	forceSyncInt := 0
+	if settings.ForceSyncExternal {
+		forceSyncInt = 1
+	}
+
+	syncTrafficInt := 0
+	if settings.SyncTraffic {
+		syncTrafficInt = 1
+	}
+
+	enableProbeBindingInt := 0
+	if settings.EnableProbeBinding {
+		enableProbeBindingInt = 1
+	}
+
+	matchRule := strings.TrimSpace(settings.MatchRule)
+	if matchRule == "" {
+		matchRule = "node_name"
+	}
+
+	cacheExpireMinutes := settings.CacheExpireMinutes
+	if cacheExpireMinutes < 0 {
+		cacheExpireMinutes = 0
+	}
+
+	const stmt = `
+		INSERT INTO user_settings (username, force_sync_external, match_rule, cache_expire_minutes, sync_traffic, enable_probe_binding, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(username) DO UPDATE SET
+			force_sync_external = excluded.force_sync_external,
+			match_rule = excluded.match_rule,
+			cache_expire_minutes = excluded.cache_expire_minutes,
+			sync_traffic = excluded.sync_traffic,
+			enable_probe_binding = excluded.enable_probe_binding,
+			updated_at = CURRENT_TIMESTAMP
+	`
+
+	if _, err := r.db.ExecContext(ctx, stmt, username, forceSyncInt, matchRule, cacheExpireMinutes, syncTrafficInt, enableProbeBindingInt); err != nil {
+		return fmt.Errorf("upsert user settings: %w", err)
+	}
+
+	return nil
+}
+
+// ListExternalSubscriptions returns all external subscriptions for a user.
+func (r *TrafficRepository) ListExternalSubscriptions(ctx context.Context, username string) ([]ExternalSubscription, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("traffic repository not initialized")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, errors.New("username is required")
+	}
+
+	const stmt = `SELECT id, username, name, url, node_count, last_sync_at, COALESCE(upload, 0), COALESCE(download, 0), COALESCE(total, 0), expire, created_at, updated_at FROM external_subscriptions WHERE username = ? ORDER BY created_at DESC`
+	rows, err := r.db.QueryContext(ctx, stmt, username)
+	if err != nil {
+		return nil, fmt.Errorf("list external subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var subs []ExternalSubscription
+	for rows.Next() {
+		var sub ExternalSubscription
+		var lastSyncAt, expire sql.NullTime
+		if err := rows.Scan(&sub.ID, &sub.Username, &sub.Name, &sub.URL, &sub.NodeCount, &lastSyncAt, &sub.Upload, &sub.Download, &sub.Total, &expire, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan external subscription: %w", err)
+		}
+		if lastSyncAt.Valid {
+			sub.LastSyncAt = &lastSyncAt.Time
+		}
+		if expire.Valid {
+			sub.Expire = &expire.Time
+		}
+		subs = append(subs, sub)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate external subscriptions: %w", err)
+	}
+
+	return subs, nil
+}
+
+// GetExternalSubscription retrieves an external subscription by ID.
+func (r *TrafficRepository) GetExternalSubscription(ctx context.Context, id int64, username string) (ExternalSubscription, error) {
+	var sub ExternalSubscription
+	if r == nil || r.db == nil {
+		return sub, errors.New("traffic repository not initialized")
+	}
+
+	if id <= 0 {
+		return sub, errors.New("subscription id is required")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return sub, errors.New("username is required")
+	}
+
+	const stmt = `SELECT id, username, name, url, node_count, last_sync_at, created_at, updated_at FROM external_subscriptions WHERE id = ? AND username = ? LIMIT 1`
+	var lastSyncAt sql.NullTime
+	err := r.db.QueryRowContext(ctx, stmt, id, username).Scan(&sub.ID, &sub.Username, &sub.Name, &sub.URL, &sub.NodeCount, &lastSyncAt, &sub.CreatedAt, &sub.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sub, ErrExternalSubscriptionNotFound
+		}
+		return sub, fmt.Errorf("get external subscription: %w", err)
+	}
+
+	if lastSyncAt.Valid {
+		sub.LastSyncAt = &lastSyncAt.Time
+	}
+
+	return sub, nil
+}
+
+// CreateExternalSubscription creates a new external subscription.
+func (r *TrafficRepository) CreateExternalSubscription(ctx context.Context, sub ExternalSubscription) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, errors.New("traffic repository not initialized")
+	}
+
+	username := strings.TrimSpace(sub.Username)
+	if username == "" {
+		return 0, errors.New("username is required")
+	}
+
+	name := strings.TrimSpace(sub.Name)
+	if name == "" {
+		return 0, errors.New("subscription name is required")
+	}
+
+	url := strings.TrimSpace(sub.URL)
+	if url == "" {
+		return 0, errors.New("subscription url is required")
+	}
+
+	const stmt = `INSERT INTO external_subscriptions (username, name, url, node_count, last_sync_at) VALUES (?, ?, ?, ?, ?)`
+	result, err := r.db.ExecContext(ctx, stmt, username, name, url, sub.NodeCount, sub.LastSyncAt)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, ErrExternalSubscriptionExists
+		}
+		return 0, fmt.Errorf("create external subscription: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get last insert id: %w", err)
+	}
+
+	return id, nil
+}
+
+// UpdateExternalSubscription updates an existing external subscription.
+func (r *TrafficRepository) UpdateExternalSubscription(ctx context.Context, sub ExternalSubscription) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	if sub.ID <= 0 {
+		return errors.New("subscription id is required")
+	}
+
+	username := strings.TrimSpace(sub.Username)
+	if username == "" {
+		return errors.New("username is required")
+	}
+
+	name := strings.TrimSpace(sub.Name)
+	if name == "" {
+		return errors.New("subscription name is required")
+	}
+
+	url := strings.TrimSpace(sub.URL)
+	if url == "" {
+		return errors.New("subscription url is required")
+	}
+
+	const stmt = `UPDATE external_subscriptions SET name = ?, url = ?, node_count = ?, last_sync_at = ?, upload = ?, download = ?, total = ?, expire = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND username = ?`
+	result, err := r.db.ExecContext(ctx, stmt, name, url, sub.NodeCount, sub.LastSyncAt, sub.Upload, sub.Download, sub.Total, sub.Expire, sub.ID, username)
+	if err != nil {
+		return fmt.Errorf("update external subscription: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrExternalSubscriptionNotFound
+	}
+
+	return nil
+}
+
+// DeleteExternalSubscription deletes an external subscription.
+func (r *TrafficRepository) DeleteExternalSubscription(ctx context.Context, id int64, username string) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	if id <= 0 {
+		return errors.New("subscription id is required")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return errors.New("username is required")
+	}
+
+	const stmt = `DELETE FROM external_subscriptions WHERE id = ? AND username = ?`
+	result, err := r.db.ExecContext(ctx, stmt, id, username)
+	if err != nil {
+		return fmt.Errorf("delete external subscription: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrExternalSubscriptionNotFound
+	}
+
+	return nil
 }

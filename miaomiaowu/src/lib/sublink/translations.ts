@@ -2,7 +2,7 @@
 // Maps category internal names to display names with emoji
 
 export const OUTBOUND_NAMES: Record<string, string> = {
-  'Auto Select': '⚡ 自动选择',
+  'Auto Select': '♻️ 自动选择',
   'Node Select': '🚀 节点选择',
   'Fall Back': '🐟 漏网之鱼',
   'Ad Block': '🛑 广告拦截',

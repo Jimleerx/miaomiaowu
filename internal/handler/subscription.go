@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"traffic-info/internal/auth"
 	"traffic-info/internal/storage"
@@ -85,6 +87,71 @@ func (s *subscriptionEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Get username from context
+	username := auth.UsernameFromContext(request.Context())
+
+	// Check if force sync external subscriptions is enabled
+	if username != "" && s.repo != nil {
+		settings, err := s.repo.GetUserSettings(request.Context(), username)
+		if err == nil && settings.ForceSyncExternal {
+			log.Printf("[Subscription] User %s has force sync enabled (cache_expire_minutes: %d)", username, settings.CacheExpireMinutes)
+
+			// Get external subscriptions first
+			externalSubs, err := s.repo.ListExternalSubscriptions(request.Context(), username)
+			if err != nil || len(externalSubs) == 0 {
+				// No external subscriptions or error, skip sync
+				log.Printf("[Subscription] User %s has no external subscriptions, skipping sync", username)
+				s.inner.ServeHTTP(w, request)
+				return
+			}
+
+			log.Printf("[Subscription] User %s has %d external subscriptions", username, len(externalSubs))
+
+			// Check if we need to sync based on cache expiration
+			shouldSync := false
+
+			if settings.CacheExpireMinutes > 0 {
+				// Check last sync time for all external subscriptions
+				for _, sub := range externalSubs {
+					if sub.LastSyncAt == nil {
+						// Never synced before
+						log.Printf("[Subscription] Subscription %s (%s) never synced, will sync", sub.Name, sub.URL)
+						shouldSync = true
+						break
+					}
+
+					// Calculate time difference in minutes
+					elapsed := time.Since(*sub.LastSyncAt).Minutes()
+					if elapsed >= float64(settings.CacheExpireMinutes) {
+						// Cache expired
+						log.Printf("[Subscription] Subscription %s (%s) cache expired (%.2f >= %d minutes), will sync", sub.Name, sub.URL, elapsed, settings.CacheExpireMinutes)
+						shouldSync = true
+						break
+					}
+				}
+				if !shouldSync {
+					log.Printf("[Subscription] All subscriptions are within cache time, skipping sync")
+				}
+			} else {
+				// Cache expire minutes is 0, always sync
+				log.Printf("[Subscription] Cache expire minutes is 0, will always sync")
+				shouldSync = true
+			}
+
+			if shouldSync {
+				log.Printf("[Subscription] Starting external subscriptions sync for user %s", username)
+				// Sync external subscriptions before serving the subscription
+				if err := syncExternalSubscriptions(request.Context(), s.repo, s.inner.baseDir, username); err != nil {
+					log.Printf("[Subscription] Failed to sync external subscriptions: %v", err)
+					// Log error but don't fail the request
+					// The sync is best-effort
+				} else {
+					log.Printf("[Subscription] External subscriptions sync completed successfully")
+				}
+			}
+		}
+	}
+
 	s.inner.ServeHTTP(w, request)
 }
 
@@ -124,8 +191,11 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Get username from context
+	username := auth.UsernameFromContext(r.Context())
+
 	// 尝试获取流量信息，如果探针未配置则跳过流量统计
-	totalLimit, _, totalUsed, err := h.summary.fetchTotals(r.Context())
+	totalLimit, _, totalUsed, err := h.summary.fetchTotals(r.Context(), username)
 	hasTrafficInfo := err == nil
 	// 如果是探针未配置的错误，不返回错误，继续处理
 	if err != nil && !errors.Is(err, storage.ErrProbeConfigNotFound) {
@@ -228,13 +298,112 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	// 检查是否需要汇总外部订阅的流量信息
+	externalTrafficLimit, externalTrafficUsed := int64(0), int64(0)
+	if username != "" && h.repo != nil {
+		settings, err := h.repo.GetUserSettings(r.Context(), username)
+		if err == nil && settings.SyncTraffic {
+			log.Printf("[Subscription] User %s has SyncTraffic enabled, checking for external subscription nodes", username)
+			// 解析 YAML 文件，获取其中使用的节点名称
+			var yamlConfig map[string]any
+			if err := yaml.Unmarshal(data, &yamlConfig); err == nil {
+				if proxies, ok := yamlConfig["proxies"].([]any); ok {
+					log.Printf("[Subscription] Found %d proxies in subscription YAML", len(proxies))
+					// 收集所有节点名称
+					usedNodeNames := make(map[string]bool)
+					for _, proxy := range proxies {
+						if proxyMap, ok := proxy.(map[string]any); ok {
+							if name, ok := proxyMap["name"].(string); ok && name != "" {
+								usedNodeNames[name] = true
+							}
+						}
+					}
+
+					// 如果有节点名称，从数据库查询这些节点的 tag
+					if len(usedNodeNames) > 0 {
+						log.Printf("[Subscription] Querying database for %d nodes", len(usedNodeNames))
+						nodes, err := h.repo.ListNodes(r.Context(), username)
+						if err == nil {
+							// 收集使用到的外部订阅名称（通过 tag 识别）
+							usedExternalSubs := make(map[string]bool)
+							for _, node := range nodes {
+								// 检查节点是否在订阅文件中
+								if usedNodeNames[node.NodeName] {
+									// 如果 tag 不是默认值，说明是外部订阅节点
+									if node.Tag != "" && node.Tag != "手动输入" {
+										usedExternalSubs[node.Tag] = true
+										log.Printf("[Subscription] Node '%s' is from external subscription '%s'", node.NodeName, node.Tag)
+									}
+								}
+							}
+
+							// 如果有使用到外部订阅的节点，汇总这些订阅的流量
+							if len(usedExternalSubs) > 0 {
+								log.Printf("[Subscription] Found %d external subscriptions in use: %v", len(usedExternalSubs), getKeys(usedExternalSubs))
+								externalSubs, err := h.repo.ListExternalSubscriptions(r.Context(), username)
+								if err == nil {
+									now := time.Now()
+									for _, sub := range externalSubs {
+										// 只汇总使用到的外部订阅
+										if usedExternalSubs[sub.Name] {
+											// 如果有过期时间且已过期，则跳过
+											// 如果过期时间为空，表示长期订阅，不跳过
+											if sub.Expire != nil && sub.Expire.Before(now) {
+												log.Printf("[Subscription] Skipping expired external subscription '%s' (expired at %s)", sub.Name, sub.Expire.Format("2006-01-02 15:04:05"))
+												continue
+											}
+											if sub.Expire == nil {
+												log.Printf("[Subscription] Adding traffic from long-term external subscription '%s': upload=%d, download=%d, total=%d",
+													sub.Name, sub.Upload, sub.Download, sub.Total)
+											} else {
+												log.Printf("[Subscription] Adding traffic from external subscription '%s': upload=%d, download=%d, total=%d (expires at %s)",
+													sub.Name, sub.Upload, sub.Download, sub.Total, sub.Expire.Format("2006-01-02 15:04:05"))
+											}
+											externalTrafficLimit += sub.Total
+											externalTrafficUsed += sub.Upload + sub.Download
+										}
+									}
+									log.Printf("[Subscription] External subscriptions traffic total: limit=%d bytes (%.2f GB), used=%d bytes (%.2f GB)",
+										externalTrafficLimit, float64(externalTrafficLimit)/(1024*1024*1024),
+										externalTrafficUsed, float64(externalTrafficUsed)/(1024*1024*1024))
+								} else {
+									log.Printf("[Subscription] Failed to list external subscriptions: %v", err)
+								}
+							} else {
+								log.Printf("[Subscription] No external subscription nodes found in use")
+							}
+						} else {
+							log.Printf("[Subscription] Failed to list nodes: %v", err)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	attachmentName := url.PathEscape("妙妙屋-" + displayName + ext)
 
 	w.Header().Set("Content-Type", contentType)
 	// 只有在有流量信息时才添加 subscription-userinfo 头
-	if hasTrafficInfo {
-		headerValue := buildSubscriptionHeader(totalLimit, totalUsed)
+	if hasTrafficInfo || externalTrafficLimit > 0 {
+		// 汇总探针流量和外部订阅流量
+		finalLimit := totalLimit + externalTrafficLimit
+		finalUsed := totalUsed + externalTrafficUsed
+
+		log.Printf("[Subscription] Final traffic summary for user %s:", username)
+		log.Printf("[Subscription]   Probe traffic:    limit=%d bytes (%.2f GB), used=%d bytes (%.2f GB)",
+			totalLimit, float64(totalLimit)/(1024*1024*1024),
+			totalUsed, float64(totalUsed)/(1024*1024*1024))
+		log.Printf("[Subscription]   External traffic: limit=%d bytes (%.2f GB), used=%d bytes (%.2f GB)",
+			externalTrafficLimit, float64(externalTrafficLimit)/(1024*1024*1024),
+			externalTrafficUsed, float64(externalTrafficUsed)/(1024*1024*1024))
+		log.Printf("[Subscription]   Total traffic:    limit=%d bytes (%.2f GB), used=%d bytes (%.2f GB)",
+			finalLimit, float64(finalLimit)/(1024*1024*1024),
+			finalUsed, float64(finalUsed)/(1024*1024*1024))
+
+		headerValue := buildSubscriptionHeader(finalLimit, finalUsed)
 		w.Header().Set("subscription-userinfo", headerValue)
+		log.Printf("[Subscription] Setting subscription-userinfo header: %s", headerValue)
 	}
 	w.Header().Set("profile-update-interval", "24")
 	if clientType == "" {
@@ -275,6 +444,15 @@ func buildSubscriptionHeader(totalLimit, totalUsed int64) string {
 	download := strconv.FormatInt(totalUsed, 10)
 	total := strconv.FormatInt(totalLimit, 10)
 	return "upload=0; download=" + download + "; total=" + total + "; expire="
+}
+
+// getKeys returns the keys of a map as a slice
+func getKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // convertSubscription converts a YAML subscription file to the specified client format

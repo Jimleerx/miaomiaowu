@@ -245,6 +245,70 @@ function parseSocks(url: string): ProxyNode | null {
 }
 
 /**
+ * 解析 Snell 协议
+ * 格式: snell://password@server:port?obfs=http&obfs-host=example.com&version=4#name
+ */
+// function parseSnell(url: string): ProxyNode | null {
+//   try {
+//     const content = url.substring('snell://'.length)
+//     let name = 'Snell Node'
+//     let mainPart = content
+
+//     // 提取节点名称
+//     if (content.includes('#')) {
+//       const hashIndex = content.lastIndexOf('#')
+//       mainPart = content.substring(0, hashIndex)
+//       name = decodeURIComponent(content.substring(hashIndex + 1))
+//     }
+
+//     // 提取查询参数
+//     let queryParams: Record<string, string> = {}
+//     let authAndServer = mainPart
+//     if (mainPart.includes('?')) {
+//       const [main, query] = mainPart.split('?')
+//       authAndServer = main
+//       queryParams = parseQueryString(query)
+//     }
+
+//     // 解析 password@server:port
+//     const atIndex = authAndServer.lastIndexOf('@')
+//     if (atIndex === -1) return null
+
+//     const password = authAndServer.substring(0, atIndex)
+//     const serverPart = authAndServer.substring(atIndex + 1)
+
+//     // 解析 server:port
+//     const colonIndex = serverPart.lastIndexOf(':')
+//     if (colonIndex === -1) return null
+
+//     const server = serverPart.substring(0, colonIndex)
+//     const port = parseInt(serverPart.substring(colonIndex + 1)) || 0
+
+//     const node: ProxyNode = {
+//       name,
+//       type: 'snell',
+//       server,
+//       port,
+//       psk: password,  // Snell 使用 psk (pre-shared key)
+//       version: parseInt(queryParams.version) || 4  // 默认版本 4
+//     }
+
+//     // 混淆设置
+//     if (queryParams.obfs && queryParams.obfs !== 'none') {
+//       node['obfs-opts'] = {
+//         mode: queryParams.obfs,  // http, tls
+//         host: queryParams['obfs-host'] || queryParams['obfs-hostname'] || ''
+//       }
+//     }
+
+//     return node
+//   } catch (e) {
+//     toast(`Parse Snell error: ${e instanceof Error ? e.message : String(e)}`)
+//     return null
+//   }
+// }
+
+/**
  * 解析通用协议 (trojan, vless, tuic, hysteria, hysteria2)
  * 格式: protocol://password@server:port?key1=value1&key2=value2#name
  */
@@ -354,6 +418,7 @@ function parseGenericProtocol(url: string, protocol: string): ProxyNode | null {
         node.password = password
         node.uuid = password
         node.flow = queryParams.flow || ''
+        node.encryption = queryParams.encryption || 'none' // 加密方式，默认为 none
         node.security = queryParams.security || 'none'
         node.tls = queryParams.security === 'tls' || queryParams.security === 'reality'
         node.network = queryParams.type || 'tcp'
@@ -457,6 +522,8 @@ export function parseProxyUrl(url: string): ProxyNode | null {
     return parseShadowsocks(url)
   } else if (url.startsWith('socks://')) {
     return parseSocks(url)
+  // } else if (url.startsWith('snell://')) {
+  //   return parseSnell(url)
   } else if (url.startsWith('trojan://')) {
     return parseGenericProtocol(url, 'trojan')
   } else if (url.startsWith('vless://')) {
@@ -515,6 +582,8 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     'auth', // Hysteria2 内部使用的中间字段，已转换为 password
     'password', // 认证字段，已在第530-541行根据协议类型单独处理
     'uuid', // 认证字段，已在第526-528行单独处理
+    // 'psk', // Snell 认证字段，需单独处理
+    // 'version', // Snell 版本字段，需单独处理
     // 已处理的参数
     'security', // 已转换为 tls 和 reality-opts
     'fingerprint' // 已转换为 client-fingerprint
@@ -535,6 +604,19 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
   // 根据协议类型设置认证字段
   if (node.type === 'vless') {
     // VLESS 只使用 uuid，不需要 password
+    // 添加 encryption 字段（VLESS 特有）
+    if (node.encryption) {
+      clash.encryption = node.encryption
+    }
+  // } else if (node.type === 'snell') {
+  //   // Snell 使用 psk (pre-shared key)
+  //   if (node.psk) {
+  //     clash.psk = node.psk
+  //   }
+  //   // Snell version
+  //   if (node.version) {
+  //     clash.version = node.version
+  //   }
   } else if (node.type === 'hysteria2' || node.type === 'hysteria') {
     // Hysteria/Hysteria2 使用 password
     if (node.password) {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"traffic-info/internal/auth"
 	"traffic-info/internal/storage"
 )
 
@@ -80,7 +81,9 @@ func (h *TrafficSummaryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
-	totalLimit, totalRemaining, totalUsed, err := h.fetchTotals(ctx)
+	username := auth.UsernameFromContext(ctx)
+
+	totalLimit, totalRemaining, totalUsed, err := h.fetchTotals(ctx, username)
 	if err != nil {
 		// Return empty metrics if probe is not configured yet
 		if errors.Is(err, storage.ErrProbeConfigNotFound) {
@@ -101,6 +104,15 @@ func (h *TrafficSummaryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 		writeError(w, http.StatusBadGateway, err)
 		return
+	}
+
+	// Add external subscription traffic if sync_traffic is enabled
+	if username != "" {
+		externalLimit, externalUsed := h.fetchExternalSubscriptionTraffic(ctx, username)
+		totalLimit += externalLimit
+		totalUsed += externalUsed
+		// Recalculate remaining
+		totalRemaining = totalLimit - totalUsed
 	}
 
 	if err := h.recordSnapshot(ctx, totalLimit, totalUsed, totalRemaining); err != nil {
@@ -131,15 +143,31 @@ func (h *TrafficSummaryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 // RecordDailyUsage fetches the latest traffic summary and persists the snapshot.
 func (h *TrafficSummaryHandler) RecordDailyUsage(ctx context.Context) error {
-	totalLimit, totalRemaining, totalUsed, err := h.fetchTotals(ctx)
+	totalLimit, totalRemaining, totalUsed, err := h.fetchTotals(ctx, "")
 	if err != nil {
+		log.Printf("[Traffic Record] Failed to fetch traffic data: %v", err)
 		return err
 	}
 
-	return h.recordSnapshot(ctx, totalLimit, totalUsed, totalRemaining)
+	// Log fetched data
+	limitGB := roundUpTwoDecimals(bytesToGigabytes(totalLimit))
+	usedGB := roundUpTwoDecimals(bytesToGigabytes(totalUsed))
+	remainingGB := roundUpTwoDecimals(bytesToGigabytes(totalRemaining))
+	usagePercent := roundUpTwoDecimals(usagePercentage(totalUsed, totalLimit))
+
+	log.Printf("[Traffic Record] Fetched from probe - Limit: %.2f GB, Used: %.2f GB, Remaining: %.2f GB, Usage: %.2f%%",
+		limitGB, usedGB, remainingGB, usagePercent)
+
+	if err := h.recordSnapshot(ctx, totalLimit, totalUsed, totalRemaining); err != nil {
+		log.Printf("[Traffic Record] Failed to save snapshot to database: %v", err)
+		return err
+	}
+
+	log.Printf("[Traffic Record] Successfully saved snapshot to database")
+	return nil
 }
 
-func (h *TrafficSummaryHandler) fetchTotals(ctx context.Context) (int64, int64, int64, error) {
+func (h *TrafficSummaryHandler) fetchTotals(ctx context.Context, username string) (int64, int64, int64, error) {
 	if h.repo == nil {
 		return 0, 0, 0, errors.New("traffic repository not configured")
 	}
@@ -151,6 +179,40 @@ func (h *TrafficSummaryHandler) fetchTotals(ctx context.Context) (int64, int64, 
 
 	if len(cfg.Servers) == 0 {
 		return 0, 0, 0, errors.New("no probe servers configured")
+	}
+
+	// Get user settings to check if probe binding is enabled
+	if username != "" {
+		userSettings, err := h.repo.GetUserSettings(ctx, username)
+		if err == nil && userSettings.EnableProbeBinding {
+			// Get all nodes for this user
+			nodes, err := h.repo.ListNodes(ctx, username)
+			if err == nil {
+				// Collect unique probe server names that are bound to nodes
+				boundProbeServers := make(map[string]bool)
+				for _, node := range nodes {
+					if node.ProbeServer != "" {
+						boundProbeServers[node.ProbeServer] = true
+					}
+				}
+
+				if len(boundProbeServers) > 0 {
+					// Filter servers to only include bound ones
+					filteredServers := make([]storage.ProbeServer, 0)
+					for _, srv := range cfg.Servers {
+						name := strings.TrimSpace(srv.Name)
+						if boundProbeServers[name] {
+							filteredServers = append(filteredServers, srv)
+						}
+					}
+					cfg.Servers = filteredServers
+					log.Printf("[Traffic Fetch] Probe binding enabled, filtered to %d bound servers", len(cfg.Servers))
+				} else {
+					log.Printf("[Traffic Fetch] Probe binding enabled but no nodes have bound servers, returning zero traffic")
+					return 0, 0, 0, nil
+				}
+			}
+		}
 	}
 
 	serverIDs := make([]string, 0, len(cfg.Servers))
@@ -165,6 +227,9 @@ func (h *TrafficSummaryHandler) fetchTotals(ctx context.Context) (int64, int64, 
 	if len(serverIDs) == 0 {
 		return 0, 0, 0, errors.New("no server ids configured")
 	}
+
+	log.Printf("[Traffic Fetch] Probe type: %s, Address: %s, Server count: %d, Server IDs: %v",
+		cfg.ProbeType, cfg.Address, len(cfg.Servers), serverIDs)
 
 	switch cfg.ProbeType {
 	case storage.ProbeTypeNezha:
@@ -303,6 +368,8 @@ func (h *TrafficSummaryHandler) fetchNezhaTotals(ctx context.Context, cfg storag
 	var totalLimit int64
 	var totalUsed int64
 
+	log.Printf("[Nezha] Processing %d servers from WebSocket data", len(cfg.Servers))
+
 	for _, srv := range cfg.Servers {
 		id := strings.TrimSpace(srv.ServerID)
 		if id == "" {
@@ -313,6 +380,7 @@ func (h *TrafficSummaryHandler) fetchNezhaTotals(ctx context.Context, cfg storag
 
 		wsEntry, ok := observed[id]
 		if !ok {
+			log.Printf("[Nezha] Server ID %s not found in probe data", id)
 			continue
 		}
 
@@ -333,6 +401,10 @@ func (h *TrafficSummaryHandler) fetchNezhaTotals(ctx context.Context, cfg storag
 			used = srv.MonthlyTrafficBytes
 		}
 
+		log.Printf("[Nezha] Server ID %s - NetIn: %.2f GB, NetOut: %.2f GB, Method: %s, Used: %.2f GB, Limit: %.2f GB",
+			id, bytesToGigabytes(wsEntry.NetIn), bytesToGigabytes(wsEntry.NetOut),
+			srv.TrafficMethod, bytesToGigabytes(used), bytesToGigabytes(srv.MonthlyTrafficBytes))
+
 		totalUsed += used
 	}
 
@@ -340,6 +412,9 @@ func (h *TrafficSummaryHandler) fetchNezhaTotals(ctx context.Context, cfg storag
 	if totalRemaining < 0 {
 		totalRemaining = 0
 	}
+
+	log.Printf("[Nezha] Total - Limit: %.2f GB, Used: %.2f GB, Remaining: %.2f GB",
+		bytesToGigabytes(totalLimit), bytesToGigabytes(totalUsed), bytesToGigabytes(totalRemaining))
 
 	return totalLimit, totalRemaining, totalUsed, nil
 }
@@ -434,6 +509,8 @@ func (h *TrafficSummaryHandler) fetchNezhaV0Totals(ctx context.Context, cfg stor
 	var totalLimit int64
 	var totalUsed int64
 
+	log.Printf("[Nezha V0] Processing %d servers from HTTP API data", len(cfg.Servers))
+
 	for _, srv := range cfg.Servers {
 		id := strings.TrimSpace(srv.ServerID)
 		if id == "" {
@@ -444,6 +521,7 @@ func (h *TrafficSummaryHandler) fetchNezhaV0Totals(ctx context.Context, cfg stor
 
 		entry, ok := observed[id]
 		if !ok {
+			log.Printf("[Nezha V0] Server ID %s not found in probe data", id)
 			continue
 		}
 
@@ -464,6 +542,10 @@ func (h *TrafficSummaryHandler) fetchNezhaV0Totals(ctx context.Context, cfg stor
 			used = srv.MonthlyTrafficBytes
 		}
 
+		log.Printf("[Nezha V0] Server ID %s - NetIn: %.2f GB, NetOut: %.2f GB, Method: %s, Used: %.2f GB, Limit: %.2f GB",
+			id, bytesToGigabytes(entry.NetIn), bytesToGigabytes(entry.NetOut),
+			srv.TrafficMethod, bytesToGigabytes(used), bytesToGigabytes(srv.MonthlyTrafficBytes))
+
 		totalUsed += used
 	}
 
@@ -471,6 +553,9 @@ func (h *TrafficSummaryHandler) fetchNezhaV0Totals(ctx context.Context, cfg stor
 	if totalRemaining < 0 {
 		totalRemaining = 0
 	}
+
+	log.Printf("[Nezha V0] Total - Limit: %.2f GB, Used: %.2f GB, Remaining: %.2f GB",
+		bytesToGigabytes(totalLimit), bytesToGigabytes(totalUsed), bytesToGigabytes(totalRemaining))
 
 	return totalLimit, totalRemaining, totalUsed, nil
 }
@@ -570,6 +655,8 @@ func (h *TrafficSummaryHandler) fetchKomariTotals(ctx context.Context, cfg stora
 	var totalLimit int64
 	var totalUsed int64
 
+	log.Printf("[Komari] Processing %d servers from JSON-RPC data", len(cfg.Servers))
+
 	for _, srv := range cfg.Servers {
 		id := strings.TrimSpace(srv.ServerID)
 		if id == "" {
@@ -580,6 +667,7 @@ func (h *TrafficSummaryHandler) fetchKomariTotals(ctx context.Context, cfg stora
 
 		usage, ok := observed[id]
 		if !ok {
+			log.Printf("[Komari] Server ID %s not found in probe data", id)
 			continue
 		}
 
@@ -600,6 +688,10 @@ func (h *TrafficSummaryHandler) fetchKomariTotals(ctx context.Context, cfg stora
 			used = srv.MonthlyTrafficBytes
 		}
 
+		log.Printf("[Komari] Server ID %s - Up: %.2f GB, Down: %.2f GB, Method: %s, Used: %.2f GB, Limit: %.2f GB",
+			id, bytesToGigabytes(usage.Up), bytesToGigabytes(usage.Down),
+			srv.TrafficMethod, bytesToGigabytes(used), bytesToGigabytes(srv.MonthlyTrafficBytes))
+
 		totalUsed += used
 	}
 
@@ -607,6 +699,9 @@ func (h *TrafficSummaryHandler) fetchKomariTotals(ctx context.Context, cfg stora
 	if totalRemaining < 0 {
 		totalRemaining = 0
 	}
+
+	log.Printf("[Komari] Total - Limit: %.2f GB, Used: %.2f GB, Remaining: %.2f GB",
+		bytesToGigabytes(totalLimit), bytesToGigabytes(totalUsed), bytesToGigabytes(totalRemaining))
 
 	return totalLimit, totalRemaining, totalUsed, nil
 }
@@ -657,11 +752,23 @@ func (h *TrafficSummaryHandler) fetchBatchTraffic(ctx context.Context, base *url
 	var totalRemaining int64
 	var totalUsed int64
 
-	for _, entry := range payloadResp.Data {
-		totalLimit += jsonNumberToInt64(entry.Monthly.Limit)
-		totalRemaining += jsonNumberToInt64(entry.Monthly.Remaining)
-		totalUsed += jsonNumberToInt64(entry.Monthly.Used)
+	log.Printf("[Dstatus] Processing %d servers from batch traffic API", len(payloadResp.Data))
+
+	for serverID, entry := range payloadResp.Data {
+		limit := jsonNumberToInt64(entry.Monthly.Limit)
+		used := jsonNumberToInt64(entry.Monthly.Used)
+		remaining := jsonNumberToInt64(entry.Monthly.Remaining)
+
+		log.Printf("[Dstatus] Server ID %s - Limit: %.2f GB, Used: %.2f GB, Remaining: %.2f GB",
+			serverID, bytesToGigabytes(limit), bytesToGigabytes(used), bytesToGigabytes(remaining))
+
+		totalLimit += limit
+		totalRemaining += remaining
+		totalUsed += used
 	}
+
+	log.Printf("[Dstatus] Total - Limit: %.2f GB, Used: %.2f GB, Remaining: %.2f GB",
+		bytesToGigabytes(totalLimit), bytesToGigabytes(totalUsed), bytesToGigabytes(totalRemaining))
 
 	return totalLimit, totalRemaining, totalUsed, nil
 }
@@ -751,6 +858,50 @@ func (h *TrafficSummaryHandler) loadHistory(ctx context.Context, days int) ([]tr
 	}
 
 	return usages, nil
+}
+
+// fetchExternalSubscriptionTraffic fetches traffic from external subscriptions
+// Returns totalLimit and totalUsed from non-expired subscriptions (or long-term subscriptions without expire date)
+func (h *TrafficSummaryHandler) fetchExternalSubscriptionTraffic(ctx context.Context, username string) (int64, int64) {
+	// Check if sync_traffic is enabled
+	settings, err := h.repo.GetUserSettings(ctx, username)
+	if err != nil || !settings.SyncTraffic {
+		return 0, 0
+	}
+
+	// Get all external subscriptions
+	subs, err := h.repo.ListExternalSubscriptions(ctx, username)
+	if err != nil {
+		log.Printf("[Traffic] Failed to fetch external subscriptions: %v", err)
+		return 0, 0
+	}
+
+	var totalLimit int64
+	var totalUsed int64
+	now := time.Now()
+
+	for _, sub := range subs {
+		// Skip if subscription is expired
+		// If Expire is nil, it's a long-term subscription and should not be skipped
+		if sub.Expire != nil && sub.Expire.Before(now) {
+			log.Printf("[Traffic] Skipping expired subscription: %s (expired at %s)", sub.Name, sub.Expire.Format("2006-01-02 15:04:05"))
+			continue
+		}
+
+		// Add traffic from this subscription
+		totalLimit += sub.Total
+		totalUsed += sub.Upload + sub.Download
+
+		if sub.Expire == nil {
+			log.Printf("[Traffic] Adding long-term subscription traffic: %s (limit=%d, used=%d)", sub.Name, sub.Total, sub.Upload+sub.Download)
+		} else {
+			log.Printf("[Traffic] Adding subscription traffic: %s (limit=%d, used=%d, expires=%s)",
+				sub.Name, sub.Total, sub.Upload+sub.Download, sub.Expire.Format("2006-01-02 15:04:05"))
+		}
+	}
+
+	log.Printf("[Traffic] Total external subscription traffic: limit=%d, used=%d", totalLimit, totalUsed)
+	return totalLimit, totalUsed
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {

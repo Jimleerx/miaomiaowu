@@ -88,22 +88,24 @@ func main() {
 	mux.Handle("/api/admin/subscribe-files/", auth.RequireAdmin(tokenStore, userRepo, handler.NewSubscribeFilesHandler(repo)))
 	mux.Handle("/api/admin/probe-config", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeConfigHandler(repo)))
 	mux.Handle("/api/admin/probe-sync", auth.RequireAdmin(tokenStore, userRepo, handler.NewProbeSyncHandler(repo)))
-	mux.Handle("/api/rules/", auth.RequireAdmin(tokenStore, userRepo, http.StripPrefix("/api/rules/", handler.NewRuleEditorHandler(subscribeDir, repo))))
+	mux.Handle("/api/admin/rules/", auth.RequireAdmin(tokenStore, userRepo, http.StripPrefix("/api/admin/rules/", handler.NewRuleEditorHandler(subscribeDir, repo))))
+	mux.Handle("/api/admin/rule-templates", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleTemplatesHandler()))
+	mux.Handle("/api/admin/rule-templates/", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleTemplatesHandler()))
+	mux.Handle("/api/admin/nodes", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo, subscribeDir)))
+	mux.Handle("/api/admin/nodes/", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo, subscribeDir)))
+	mux.Handle("/api/admin/rules/latest", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleMetadataHandler(subscribeDir, repo)))
 
 	// User endpoints (all authenticated users)
 	mux.Handle("/api/user/password", auth.RequireToken(tokenStore, handler.NewPasswordHandler(authManager)))
 	mux.Handle("/api/user/profile", auth.RequireToken(tokenStore, handler.NewProfileHandler(repo)))
 	mux.Handle("/api/user/settings", auth.RequireToken(tokenStore, handler.NewUserSettingsHandler(repo, tokenStore)))
+	mux.Handle("/api/user/config", auth.RequireToken(tokenStore, handler.NewUserConfigHandler(repo)))
 	mux.Handle("/api/user/token", auth.RequireToken(tokenStore, handler.NewUserTokenHandler(repo)))
+	mux.Handle("/api/user/external-subscriptions", auth.RequireToken(tokenStore, handler.NewExternalSubscriptionsHandler(repo)))
 	mux.Handle("/api/traffic/summary", auth.RequireToken(tokenStore, trafficHandler))
 	mux.Handle("/api/subscriptions", auth.RequireToken(tokenStore, handler.NewSubscriptionListHandler(repo)))
-	mux.Handle("/api/rules/latest", auth.RequireToken(tokenStore, handler.NewRuleMetadataHandler(subscribeDir, repo)))
 	mux.Handle("/api/dns/resolve", auth.RequireToken(tokenStore, handler.NewDNSHandler()))
-	mux.Handle("/api/nodes", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo)))
-	mux.Handle("/api/nodes/", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo)))
 	mux.Handle("/api/subscribe-files", auth.RequireToken(tokenStore, handler.NewSubscribeFilesListHandler(repo)))
-	mux.Handle("/api/rule-templates", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleTemplatesHandler()))
-	mux.Handle("/api/rule-templates/", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleTemplatesHandler()))
 	mux.Handle("/api/clash/subscribe", handler.NewSubscriptionEndpoint(tokenStore, repo, subscribeDir))
 	mux.Handle("/", web.Handler())
 
@@ -159,11 +161,14 @@ func startTrafficCollector(ctx context.Context, trafficHandler *handler.TrafficS
 	}
 
 	run := func() {
+		log.Printf("[Traffic Collector] Starting daily traffic collection at %s", time.Now().Format("2006-01-02 15:04:05"))
 		runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
 		if err := trafficHandler.RecordDailyUsage(runCtx); err != nil {
-			log.Printf("daily traffic collection failed: %v", err)
+			log.Printf("[Traffic Collector] Daily traffic collection failed: %v", err)
+		} else {
+			log.Printf("[Traffic Collector] Daily traffic collection completed successfully")
 		}
 	}
 
@@ -172,9 +177,12 @@ func startTrafficCollector(ctx context.Context, trafficHandler *handler.TrafficS
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
+	log.Printf("[Traffic Collector] Scheduler started, will run every 24 hours")
+
 	for {
 		select {
 		case <-ctx.Done():
+			log.Printf("[Traffic Collector] Scheduler stopped")
 			return
 		case <-ticker.C:
 			run()

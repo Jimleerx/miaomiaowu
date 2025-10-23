@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
+import { Route as SystemSettingsRouteImport } from './routes/system-settings'
 import { Route as SubscriptionRouteImport } from './routes/subscription'
 import { Route as SubscribeFilesRouteImport } from './routes/subscribe-files'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -23,12 +24,16 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SubscriptionIndexRouteImport } from './routes/subscription.index'
 import { Route as SubscribeFilesIndexRouteImport } from './routes/subscribe-files.index'
 import { Route as NodesIndexRouteImport } from './routes/nodes.index'
-import { Route as SubscriptionManageRouteImport } from './routes/subscription.manage'
 import { Route as SubscribeFilesCustomRouteImport } from './routes/subscribe-files.custom'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemSettingsRoute = SystemSettingsRouteImport.update({
+  id: '/system-settings',
+  path: '/system-settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SubscriptionRoute = SubscriptionRouteImport.update({
@@ -96,11 +101,6 @@ const NodesIndexRoute = NodesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => NodesRoute,
 } as any)
-const SubscriptionManageRoute = SubscriptionManageRouteImport.update({
-  id: '/manage',
-  path: '/manage',
-  getParentRoute: () => SubscriptionRoute,
-} as any)
 const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
   id: '/custom',
   path: '/custom',
@@ -118,9 +118,9 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/subscribe-files': typeof SubscribeFilesRouteWithChildren
   '/subscription': typeof SubscriptionRouteWithChildren
+  '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
-  '/subscription/manage': typeof SubscriptionManageRoute
   '/nodes/': typeof NodesIndexRoute
   '/subscribe-files/': typeof SubscribeFilesIndexRoute
   '/subscription/': typeof SubscriptionIndexRoute
@@ -133,9 +133,9 @@ export interface FileRoutesByTo {
   '/probe': typeof ProbeRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
+  '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
-  '/subscription/manage': typeof SubscriptionManageRoute
   '/nodes': typeof NodesIndexRoute
   '/subscribe-files': typeof SubscribeFilesIndexRoute
   '/subscription': typeof SubscriptionIndexRoute
@@ -152,9 +152,9 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/subscribe-files': typeof SubscribeFilesRouteWithChildren
   '/subscription': typeof SubscriptionRouteWithChildren
+  '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
-  '/subscription/manage': typeof SubscriptionManageRoute
   '/nodes/': typeof NodesIndexRoute
   '/subscribe-files/': typeof SubscribeFilesIndexRoute
   '/subscription/': typeof SubscriptionIndexRoute
@@ -172,9 +172,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subscribe-files'
     | '/subscription'
+    | '/system-settings'
     | '/users'
     | '/subscribe-files/custom'
-    | '/subscription/manage'
     | '/nodes/'
     | '/subscribe-files/'
     | '/subscription/'
@@ -187,9 +187,9 @@ export interface FileRouteTypes {
     | '/probe'
     | '/rules'
     | '/settings'
+    | '/system-settings'
     | '/users'
     | '/subscribe-files/custom'
-    | '/subscription/manage'
     | '/nodes'
     | '/subscribe-files'
     | '/subscription'
@@ -205,9 +205,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subscribe-files'
     | '/subscription'
+    | '/system-settings'
     | '/users'
     | '/subscribe-files/custom'
-    | '/subscription/manage'
     | '/nodes/'
     | '/subscribe-files/'
     | '/subscription/'
@@ -224,6 +224,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SubscribeFilesRoute: typeof SubscribeFilesRouteWithChildren
   SubscriptionRoute: typeof SubscriptionRouteWithChildren
+  SystemSettingsRoute: typeof SystemSettingsRoute
   UsersRoute: typeof UsersRoute
 }
 
@@ -234,6 +235,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof UsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/system-settings': {
+      id: '/system-settings'
+      path: '/system-settings'
+      fullPath: '/system-settings'
+      preLoaderRoute: typeof SystemSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/subscription': {
@@ -327,13 +335,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NodesIndexRouteImport
       parentRoute: typeof NodesRoute
     }
-    '/subscription/manage': {
-      id: '/subscription/manage'
-      path: '/manage'
-      fullPath: '/subscription/manage'
-      preLoaderRoute: typeof SubscriptionManageRouteImport
-      parentRoute: typeof SubscriptionRoute
-    }
     '/subscribe-files/custom': {
       id: '/subscribe-files/custom'
       path: '/custom'
@@ -369,12 +370,10 @@ const SubscribeFilesRouteWithChildren = SubscribeFilesRoute._addFileChildren(
 )
 
 interface SubscriptionRouteChildren {
-  SubscriptionManageRoute: typeof SubscriptionManageRoute
   SubscriptionIndexRoute: typeof SubscriptionIndexRoute
 }
 
 const SubscriptionRouteChildren: SubscriptionRouteChildren = {
-  SubscriptionManageRoute: SubscriptionManageRoute,
   SubscriptionIndexRoute: SubscriptionIndexRoute,
 }
 
@@ -393,6 +392,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SubscribeFilesRoute: SubscribeFilesRouteWithChildren,
   SubscriptionRoute: SubscriptionRouteWithChildren,
+  SystemSettingsRoute: SystemSettingsRoute,
   UsersRoute: UsersRoute,
 }
 export const routeTree = rootRouteImport

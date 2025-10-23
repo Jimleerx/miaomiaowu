@@ -71,7 +71,7 @@ function RulesPage() {
   const listQuery = useQuery({
     queryKey: ['rule-files'],
     queryFn: async () => {
-      const response = await api.get('/api/rules')
+      const response = await api.get('/api/admin/rules')
       return response.data as {
         files: Array<{
           name: string
@@ -99,7 +99,7 @@ function RulesPage() {
     queryKey: ['rule-file', selectedFile],
     queryFn: async () => {
       if (!selectedFile) return null
-      const response = await api.get(`/api/rules/${encodeURIComponent(selectedFile)}`)
+      const response = await api.get(`/api/admin/rules/${encodeURIComponent(selectedFile)}`)
       return response.data as {
         name: string
         content: string
@@ -121,7 +121,7 @@ function RulesPage() {
     queryKey: ['rule-history', selectedFile],
     queryFn: async () => {
       if (!selectedFile) return { history: [] as Array<any> }
-      const response = await api.get(`/api/rules/${encodeURIComponent(selectedFile)}/history`)
+      const response = await api.get(`/api/admin/rules/${encodeURIComponent(selectedFile)}/history`)
       return response.data as {
         history: Array<{
           version: number
@@ -137,7 +137,7 @@ function RulesPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (payload: { file: string; content: string }) => {
-      const response = await api.put(`/api/rules/${encodeURIComponent(payload.file)}`, {
+      const response = await api.put(`/api/admin/rules/${encodeURIComponent(payload.file)}`, {
         content: payload.content,
       })
       return response.data as { version: number }
