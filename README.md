@@ -142,7 +142,16 @@ docker-compose down
 **重要提示**：请确保定期备份这两个目录的数据。
 
 ### 方式 2：一键安装（Linux）
-
+#### ⚠ 注意：0.1.0版本修改了服务名称，无法通过脚本更新，只能重新安装
+#### 先执行以下命令卸载及转移数据
+旧服务卸载及备份转移
+```
+sudo systemctl stop traffic-info
+sudo systemctl disable traffic-info
+sudo rm -rf /etc/systemd/system/traffic-info.service
+sudo rm -f /usr/local/bin/traffic-info
+sudo cp -rf /var/lib/traffic-info/* /etc/mmw/
+```
 **自动安装为 systemd 服务（Debian/Ubuntu）：**
 ```bash
 # 下载并运行安装脚本
