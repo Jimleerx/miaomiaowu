@@ -525,7 +525,7 @@ MIT License
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
 
 ## 更新日志
-### v0.0.9 (2025-10-23)
+### v0.1.0 (2025-10-23)
 - 🌗 集成substore订阅转换功能(beta)
 - 🌈 readme移除docker的volume配置，防止小白没有权限启动失败
 - 🌈 新增arm64架构包

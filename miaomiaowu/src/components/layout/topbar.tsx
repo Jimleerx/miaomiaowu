@@ -98,15 +98,15 @@ export function Topbar() {
                 to={to}
                 aria-label={title}
                 className={cn(
-                  'pixel-button items-center justify-center gap-2 px-2 py-2 h-9 text-sm font-semibold uppercase tracking-widest sm:justify-start sm:gap-3 sm:min-w-[90px] sm:px-3 bg-background/75 text-foreground border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 hover:text-accent-foreground dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-accent/45 dark:hover:text-accent-foreground transition-all',
-                  isAdmin && to === '/' ? 'hidden sm:inline-flex' : 'inline-flex'
+                  'pixel-button items-center justify-center gap-2 px-2 py-2 h-9 text-sm font-semibold uppercase tracking-widest lg:justify-start lg:gap-3 lg:min-w-[90px] lg:px-3 bg-background/75 text-foreground border-[color:rgba(137,110,96,0.45)] hover:bg-accent/35 hover:text-accent-foreground dark:bg-input/30 dark:border-[color:rgba(255,255,255,0.18)] dark:hover:bg-accent/45 dark:hover:text-accent-foreground transition-all',
+                  isAdmin && to === '/' ? 'hidden lg:inline-flex' : 'inline-flex'
                 )}
                 activeProps={{
                   className: 'bg-primary/20 text-primary border-[color:rgba(217,119,87,0.55)] dark:bg-primary/20 dark:border-[color:rgba(217,119,87,0.55)]'
                 }}
               >
                 <Icon className='size-[18px] shrink-0' />
-                <span className='hidden sm:inline'>{title}</span>
+                <span className='hidden lg:inline'>{title}</span>
               </Link>
             ))}
           </nav>

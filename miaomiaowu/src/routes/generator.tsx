@@ -592,7 +592,27 @@ function SubscriptionGeneratorPage() {
     }
 
     if (newGroups.length > 0) {
-      setProxyGroups(groups => [...newGroups, ...groups])
+      setProxyGroups(groups => {
+        const updatedGroups = [...newGroups, ...groups]
+
+        // 如果添加了落地节点，将其添加到"🚀 节点选择"组的第一位
+        if (newGroups.some(g => g.name === '🌄 落地节点')) {
+          return updatedGroups.map(group => {
+            if (group.name === '🚀 节点选择') {
+              // 过滤掉已存在的"🌄 落地节点"（如果有的话）
+              const filteredProxies = (group.proxies || []).filter(p => p !== '🌄 落地节点')
+              // 将"🌄 落地节点"添加到第一位
+              return {
+                ...group,
+                proxies: ['🌄 落地节点', ...filteredProxies]
+              }
+            }
+            return group
+          })
+        }
+
+        return updatedGroups
+      })
       toast.success(`已添加 ${newGroups.map(g => g.name).join('、')}`)
     } else {
       toast.info('链式代理节点已存在')
@@ -1074,7 +1094,15 @@ function SubscriptionGeneratorPage() {
                     <CardHeader className='pb-3'>
                       <div className='flex items-start justify-between gap-2'>
                         <div className='flex-1 min-w-0'>
-                          <CardTitle className='text-base truncate'>{group.name}</CardTitle>
+                          <div
+                            draggable
+                            onDragStart={() => handleDragStart(group.name, null, -1)}
+                            onDragEnd={handleDragEnd}
+                            className='flex items-center gap-2 cursor-move group/title'
+                          >
+                            <GripVertical className='h-3 w-3 text-muted-foreground opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0' />
+                            <CardTitle className='text-base truncate'>{group.name}</CardTitle>
+                          </div>
                           <CardDescription className='text-xs'>
                             {group.type} ({(group.proxies || []).length} 个节点)
                           </CardDescription>
