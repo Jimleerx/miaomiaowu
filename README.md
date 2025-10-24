@@ -5,7 +5,7 @@
 ## 功能特性
 
 ### 核心功能
-- 📊 流量监控 - 支持多服务器流量聚合统计
+- 📊 流量监控 - 支持探针服务器与外部订阅流量聚合统计
 - 📈 历史流量 - 30 天流量使用趋势图表
 - 🔗 订阅链接 - 展示通过订阅管理上传或导入和生成订阅生成的订阅
 - 🔗 订阅管理 - 上传猫咪配置文件或从其他订阅url导入生成订阅
@@ -202,6 +202,7 @@ chmod +x traffic-info-linux-amd64
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/custom_proxy_group.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/node_manage.png)  
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/user_manage.png)
+![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/system_settings.png)
 ### 技术特点
 - 🚀 单二进制文件部署，无需外部依赖
 - 💾 使用 SQLite 数据库，免维护
@@ -524,7 +525,7 @@ MIT License
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
 
 ## 更新日志
-### v0.0.8 (2025-10-23)
+### v0.0.9 (2025-10-23)
 - 🌗 集成substore订阅转换功能(beta)
 - 🌈 readme移除docker的volume配置，防止小白没有权限启动失败
 - 🌈 新增arm64架构包
