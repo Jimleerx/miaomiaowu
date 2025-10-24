@@ -95,7 +95,7 @@ export function UserMenu() {
               <ExternalLink className='size-4' />
               <span className='relative'>
                 版本 v{currentVersion}
-                {!hasUpdate && (
+                {hasUpdate && (
                   <span className='absolute mt-2 -right-1.5 -top-1.5 flex size-1.5'>
                     <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75'></span>
                     <span className='relative inline-flex size-1.5 rounded-full bg-primary'></span>
