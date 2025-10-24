@@ -407,21 +407,31 @@ func NewSubscriptionListHandler(repo *storage.TrafficRepository) http.Handler {
 		}
 
 		type item struct {
-			ID          int64  `json:"id"`
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			Filename    string `json:"filename"`
-			Type        string `json:"type"`
+			ID            int64     `json:"id"`
+			Name          string    `json:"name"`
+			Description   string    `json:"description"`
+			Filename      string    `json:"filename"`
+			Type          string    `json:"type"`
+			UpdatedAt     time.Time `json:"updated_at"`
+			LatestVersion int64     `json:"latest_version,omitempty"`
 		}
 
 		payload := make([]item, 0, len(files))
 		for _, file := range files {
+			// Get latest version for this file
+			var latestVersion int64
+			if versions, err := repo.ListRuleVersions(r.Context(), file.Filename, 1); err == nil && len(versions) > 0 {
+				latestVersion = versions[0].Version
+			}
+
 			payload = append(payload, item{
-				ID:          file.ID,
-				Name:        file.Name,
-				Description: file.Description,
-				Filename:    file.Filename,
-				Type:        file.Type,
+				ID:            file.ID,
+				Name:          file.Name,
+				Description:   file.Description,
+				Filename:      file.Filename,
+				Type:          file.Type,
+				UpdatedAt:     file.UpdatedAt,
+				LatestVersion: latestVersion,
 			})
 		}
 

@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -76,6 +77,7 @@ type SubscribeFile = {
   filename: string
   created_at: string
   updated_at: string
+  latest_version?: number
 }
 
 const ICON_MAP: Record<string, any> = {
@@ -208,23 +210,32 @@ function SubscriptionPage() {
                   <div className='flex items-start gap-3'>
                     <button
                       onClick={() => setQrValue(subscribeURL)}
-                      className='flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all hover:bg-primary/20 hover:scale-110 active:scale-95 cursor-pointer'
+                      className='flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all hover:bg-primary/20 hover:scale-110 active:scale-95 cursor-pointer'
                       title='点击显示二维码'
                     >
                       <Icon className='size-6' />
                     </button>
-                    <div className='space-y-1 text-left'>
-                      <CardTitle className='text-lg'>{file.name}</CardTitle>
+                    <div className='flex-1 min-w-0 space-y-1 text-left'>
+                      <CardTitle className='text-lg truncate' title={file.name}>
+                        {file.name}
+                      </CardTitle>
                       <CardDescription>{file.description || '—'}</CardDescription>
-                      {updatedLabel ? (
-                        <p className='text-xs text-muted-foreground'>
-                          更新时间：{updatedLabel}
-                        </p>
-                      ) : null}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className='space-y-4'>
+                  <div className='flex items-center justify-end gap-2'>
+                    {updatedLabel ? (
+                      <p className='text-xs text-muted-foreground'>
+                        {updatedLabel}
+                      </p>
+                    ) : null}
+                    {file.latest_version ? (
+                      <Badge variant='secondary' className='text-xs'>
+                        v{file.latest_version}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <div className='break-all rounded-lg border bg-muted/40 p-3 font-mono text-xs shadow-inner sm:text-sm'>
                     {subscribeURL}
                   </div>

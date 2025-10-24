@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createFileRoute, redirect, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { load as parseYAML } from 'js-yaml'
+import { load as parseYAML, dump as dumpYAML } from 'js-yaml'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
-import { Upload, Download, Plus, Edit, Settings, FileText } from 'lucide-react'
+import { Upload, Download, Plus, Edit, Settings, FileText, Save, GripVertical, X, Layers } from 'lucide-react'
 
 export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
@@ -74,11 +74,24 @@ function SubscribeFilesPage() {
   const [editingFile, setEditingFile] = useState<SubscribeFile | null>(null)
   const [editMetadataDialogOpen, setEditMetadataDialogOpen] = useState(false)
   const [editingMetadata, setEditingMetadata] = useState<SubscribeFile | null>(null)
+  const [editConfigDialogOpen, setEditConfigDialogOpen] = useState(false)
+  const [editingConfigFile, setEditingConfigFile] = useState<SubscribeFile | null>(null)
+
+  // 编辑节点Dialog状态
+  const [editNodesDialogOpen, setEditNodesDialogOpen] = useState(false)
+  const [editingNodesFile, setEditingNodesFile] = useState<SubscribeFile | null>(null)
+  const [proxyGroups, setProxyGroups] = useState<Array<{ name: string; type: string; proxies: string[] }>>([])
+  const [showAllNodes, setShowAllNodes] = useState(false)
+  const [draggedNode, setDraggedNode] = useState<{ name: string; fromGroup: string | null; fromIndex: number } | null>(null)
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
 
   // 编辑器状态
   const [editorValue, setEditorValue] = useState('')
   const [isDirty, setIsDirty] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+
+  // 编辑配置状态
+  const [configContent, setConfigContent] = useState('')
 
   // 导入表单
   const [importForm, setImportForm] = useState({
@@ -216,6 +229,41 @@ function SubscribeFilesPage() {
     refetchOnWindowFocus: false,
   })
 
+  // 查询配置文件内容（编辑配置用）
+  const configFileContentQuery = useQuery({
+    queryKey: ['subscribe-file-content', editingConfigFile?.filename],
+    queryFn: async () => {
+      if (!editingConfigFile) return null
+      const response = await api.get(`/api/admin/subscribe-files/${encodeURIComponent(editingConfigFile.filename)}/content`)
+      return response.data as { content: string }
+    },
+    enabled: Boolean(editingConfigFile && auth.accessToken),
+    refetchOnWindowFocus: false,
+  })
+
+  // 查询节点列表（编辑节点用）
+  const nodesQuery = useQuery({
+    queryKey: ['nodes'],
+    queryFn: async () => {
+      const response = await api.get('/api/admin/nodes')
+      return response.data as { nodes: Array<{ id: number; node_name: string }> }
+    },
+    enabled: Boolean(editNodesDialogOpen && auth.accessToken),
+    refetchOnWindowFocus: false,
+  })
+
+  // 查询配置文件内容（编辑节点用）
+  const nodesConfigQuery = useQuery({
+    queryKey: ['nodes-config-content', editingNodesFile?.filename],
+    queryFn: async () => {
+      if (!editingNodesFile) return null
+      const response = await api.get(`/api/admin/subscribe-files/${encodeURIComponent(editingNodesFile.filename)}/content`)
+      return response.data as { content: string }
+    },
+    enabled: Boolean(editingNodesFile && auth.accessToken),
+    refetchOnWindowFocus: false,
+  })
+
   // 保存文件
   const saveMutation = useMutation({
     mutationFn: async (payload: { file: string; content: string }) => {
@@ -233,6 +281,27 @@ function SubscribeFilesPage() {
       setEditDialogOpen(false)
       setEditingFile(null)
       setEditorValue('')
+    },
+    onError: (error) => {
+      handleServerError(error)
+    },
+  })
+
+  // 保存配置文件内容
+  const saveConfigMutation = useMutation({
+    mutationFn: async (payload: { filename: string; content: string }) => {
+      const response = await api.put(`/api/admin/subscribe-files/${encodeURIComponent(payload.filename)}/content`, {
+        content: payload.content,
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      toast.success('配置已保存')
+      queryClient.invalidateQueries({ queryKey: ['subscribe-file-content', editingConfigFile?.filename] })
+      queryClient.invalidateQueries({ queryKey: ['subscribe-files'] })
+      setEditConfigDialogOpen(false)
+      setEditingConfigFile(null)
+      setConfigContent('')
     },
     onError: (error) => {
       handleServerError(error)
@@ -269,6 +338,32 @@ function SubscribeFilesPage() {
 
     return () => clearTimeout(timer)
   }, [editorValue, editingFile, fileContentQuery.isLoading])
+
+  // 加载配置文件内容
+  useEffect(() => {
+    if (!configFileContentQuery.data) return
+    setConfigContent(configFileContentQuery.data.content ?? '')
+  }, [configFileContentQuery.data])
+
+  // 解析YAML配置并提取代理组（编辑节点用）
+  useEffect(() => {
+    if (!nodesConfigQuery.data?.content) return
+
+    try {
+      const parsed = parseYAML(nodesConfigQuery.data.content) as any
+      if (parsed && parsed['proxy-groups']) {
+        const groups = parsed['proxy-groups'].map((group: any) => ({
+          name: group.name || '',
+          type: group.type || '',
+          proxies: Array.isArray(group.proxies) ? group.proxies : [],
+        }))
+        setProxyGroups(groups)
+      }
+    } catch (error) {
+      console.error('解析YAML失败:', error)
+      toast.error('解析配置文件失败')
+    }
+  }, [nodesConfigQuery.data])
 
   const handleEdit = (file: SubscribeFile) => {
     setEditingFile(file)
@@ -345,6 +440,213 @@ function SubscribeFilesPage() {
       data: metadataForm,
     })
   }
+
+  const handleEditConfig = (file: SubscribeFile) => {
+    setEditingConfigFile(file)
+    setEditConfigDialogOpen(true)
+  }
+
+  const handleSaveConfig = () => {
+    if (!editingConfigFile) return
+    try {
+      parseYAML(configContent || '')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'YAML 解析失败'
+      toast.error('保存失败，YAML 格式错误：' + message)
+      return
+    }
+    saveConfigMutation.mutate({ filename: editingConfigFile.filename, content: configContent })
+  }
+
+  const handleEditNodes = (file: SubscribeFile) => {
+    setEditingNodesFile(file)
+    setEditNodesDialogOpen(true)
+    setShowAllNodes(false)
+  }
+
+  const handleSaveNodes = async () => {
+    if (!editingNodesFile || !nodesConfigQuery.data?.content) return
+
+    try {
+      const parsed = parseYAML(nodesConfigQuery.data.content) as any
+
+      // 收集所有代理组中使用的节点名称
+      const usedNodeNames = new Set<string>()
+      proxyGroups.forEach(group => {
+        group.proxies.forEach(proxy => {
+          // 只添加实际节点（不是DIRECT、REJECT等特殊节点，也不是其他代理组）
+          if (!['DIRECT', 'REJECT', 'PROXY', 'no-resolve'].includes(proxy) &&
+              !proxyGroups.some(g => g.name === proxy)) {
+            usedNodeNames.add(proxy)
+          }
+        })
+      })
+
+      // 如果有使用的节点，从nodesQuery获取它们的配置
+      if (usedNodeNames.size > 0 && nodesQuery.data?.nodes) {
+        // 获取使用的节点的Clash配置
+        const nodeConfigs: any[] = []
+        nodesQuery.data.nodes.forEach((node: any) => {
+          if (usedNodeNames.has(node.node_name) && node.clash_config) {
+            try {
+              const clashConfig = typeof node.clash_config === 'string'
+                ? JSON.parse(node.clash_config)
+                : node.clash_config
+              nodeConfigs.push(clashConfig)
+            } catch (e) {
+              console.error(`解析节点 ${node.node_name} 的配置失败:`, e)
+            }
+          }
+        })
+
+        // 更新proxies部分
+        if (nodeConfigs.length > 0) {
+          // 保留现有的proxies中不在usedNodeNames中的节点
+          const existingProxies = parsed.proxies || []
+
+          // 合并：使用新的节点配置，添加现有但未使用的节点
+          const updatedProxies = [...nodeConfigs]
+
+          // 添加现有但未使用的节点
+          existingProxies.forEach((proxy: any) => {
+            if (!usedNodeNames.has(proxy.name) && !updatedProxies.some(p => p.name === proxy.name)) {
+              updatedProxies.push(proxy)
+            }
+          })
+
+          parsed.proxies = updatedProxies
+        }
+      } else {
+        // 如果没有使用的节点，保留原有的proxies或设置为空数组
+        if (!parsed.proxies) {
+          parsed.proxies = []
+        }
+      }
+
+      // 更新代理组
+      if (parsed && parsed['proxy-groups']) {
+        parsed['proxy-groups'] = proxyGroups.map(group => ({
+          name: group.name,
+          type: group.type,
+          proxies: group.proxies,
+        }))
+      }
+
+      // 转换回YAML
+      const newContent = dumpYAML(parsed, { lineWidth: -1, noRefs: true })
+
+      // 更新编辑配置对话框中的内容
+      setConfigContent(newContent)
+
+      // 只关闭编辑节点对话框，不保存到文件
+      setEditNodesDialogOpen(false)
+      toast.success('已应用节点配置')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '应用配置失败'
+      toast.error(message)
+      console.error('应用节点配置失败:', error)
+    }
+  }
+
+  // 拖拽相关函数
+  const handleDragStart = (nodeName: string, fromGroup: string | null, fromIndex: number) => {
+    setDraggedNode({ name: nodeName, fromGroup, fromIndex })
+  }
+
+  const handleDragEnd = () => {
+    setDraggedNode(null)
+    setDragOverGroup(null)
+  }
+
+  const handleDragEnterGroup = (groupName: string) => {
+    setDragOverGroup(groupName)
+  }
+
+  const handleDragLeaveGroup = () => {
+    setDragOverGroup(null)
+  }
+
+  const handleDrop = (toGroup: string) => {
+    if (!draggedNode) return
+
+    const updatedGroups = [...proxyGroups]
+
+    // 从原来的位置移除
+    if (draggedNode.fromGroup && draggedNode.fromGroup !== 'available') {
+      const fromGroupIndex = updatedGroups.findIndex(g => g.name === draggedNode.fromGroup)
+      if (fromGroupIndex !== -1) {
+        updatedGroups[fromGroupIndex].proxies = updatedGroups[fromGroupIndex].proxies.filter(
+          (_, idx) => idx !== draggedNode.fromIndex
+        )
+      }
+    }
+
+    // 添加到新位置
+    if (toGroup !== 'available') {
+      const toGroupIndex = updatedGroups.findIndex(g => g.name === toGroup)
+      if (toGroupIndex !== -1) {
+        // 检查节点是否已存在于目标组中
+        if (!updatedGroups[toGroupIndex].proxies.includes(draggedNode.name)) {
+          updatedGroups[toGroupIndex].proxies.push(draggedNode.name)
+        }
+      }
+    }
+
+    setProxyGroups(updatedGroups)
+    handleDragEnd()
+  }
+
+  const handleDropToAvailable = () => {
+    if (!draggedNode || !draggedNode.fromGroup || draggedNode.fromGroup === 'available') {
+      handleDragEnd()
+      return
+    }
+
+    const updatedGroups = [...proxyGroups]
+    const fromGroupIndex = updatedGroups.findIndex(g => g.name === draggedNode.fromGroup)
+
+    if (fromGroupIndex !== -1) {
+      updatedGroups[fromGroupIndex].proxies = updatedGroups[fromGroupIndex].proxies.filter(
+        (_, idx) => idx !== draggedNode.fromIndex
+      )
+    }
+
+    setProxyGroups(updatedGroups)
+    handleDragEnd()
+  }
+
+  const handleRemoveNodeFromGroup = (groupName: string, nodeIndex: number) => {
+    const updatedGroups = proxyGroups.map(group => {
+      if (group.name === groupName) {
+        return {
+          ...group,
+          proxies: group.proxies.filter((_, idx) => idx !== nodeIndex)
+        }
+      }
+      return group
+    })
+    setProxyGroups(updatedGroups)
+  }
+
+  // 计算可用节点
+  const availableNodes = useMemo(() => {
+    if (!nodesQuery.data?.nodes) return []
+
+    const allNodeNames = nodesQuery.data.nodes.map(n => n.node_name)
+
+    if (showAllNodes) {
+      return allNodeNames
+    }
+
+    // 获取所有代理组中已使用的节点
+    const usedNodes = new Set<string>()
+    proxyGroups.forEach(group => {
+      group.proxies.forEach(proxy => usedNodes.add(proxy))
+    })
+
+    // 只返回未使用的节点
+    return allNodeNames.filter(name => !usedNodes.has(name))
+  }, [nodesQuery.data, proxyGroups, showAllNodes])
 
   return (
     <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
@@ -568,7 +870,7 @@ function SubscribeFilesPage() {
                             <Button
                               variant='ghost'
                               size='sm'
-                              onClick={() => handleEdit(file)}
+                              onClick={() => handleEditConfig(file)}
                             >
                               <Edit className='mr-1 h-4 w-4' />
                               编辑配置
@@ -750,6 +1052,231 @@ function SubscribeFilesPage() {
               {updateMetadataMutation.isPending ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑配置对话框 */}
+      <Dialog open={editConfigDialogOpen} onOpenChange={(open) => {
+        setEditConfigDialogOpen(open)
+        if (!open) {
+          setEditingConfigFile(null)
+          setConfigContent('')
+        }
+      }}>
+        <DialogContent className='!max-w-[80vw] w-[80vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '50vw', width: '50vw' }}>
+          <DialogHeader>
+            <DialogTitle>编辑配置 - {editingConfigFile?.name}</DialogTitle>
+            <DialogDescription>
+              {editingConfigFile?.filename}
+            </DialogDescription>
+            <div className='flex items-center justify-end gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => handleEditNodes(editingConfigFile!)}
+              >
+                <Edit className='mr-2 h-4 w-4' />
+                编辑节点
+              </Button>
+              <Button
+                size='sm'
+                onClick={handleSaveConfig}
+                disabled={saveConfigMutation.isPending}
+              >
+                <Save className='mr-2 h-4 w-4' />
+                {saveConfigMutation.isPending ? '保存中...' : '保存'}
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className='flex-1 overflow-y-auto space-y-4'>
+
+            <div className='rounded-lg border bg-muted/30'>
+              <Textarea
+                value={configContent}
+                onChange={(e) => setConfigContent(e.target.value)}
+                className='min-h-[400px] resize-none border-0 bg-transparent font-mono text-xs'
+                placeholder='加载配置中...'
+              />
+            </div>
+            <div className='flex justify-end gap-2'>
+              <Button onClick={handleSaveConfig} disabled={saveConfigMutation.isPending}>
+                <Save className='mr-2 h-4 max-w-md' />
+                {saveConfigMutation.isPending ? '保存中...' : '保存'}
+              </Button>
+            </div>
+            <div className='rounded-lg border bg-muted/50 p-4'>
+              <h3 className='mb-2 font-semibold'>使用说明</h3>
+              <ul className='space-y-1 text-sm text-muted-foreground'>
+                <li>• 点击"保存"按钮将修改保存到配置文件</li>
+                <li>• 支持直接编辑 YAML 内容</li>
+                <li>• 保存前会自动验证 YAML 格式</li>
+                <li>• 支持 Clash、Clash Meta、Mihomo 等客户端</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑节点对话框 */}
+      <Dialog open={editNodesDialogOpen} onOpenChange={(open) => {
+        setEditNodesDialogOpen(open)
+        if (!open) {
+          setEditingNodesFile(null)
+          setProxyGroups([])
+          setShowAllNodes(false)
+        }
+      }}>
+        <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '95vw', width: '95vw' }}>
+          <DialogHeader>
+            <DialogTitle>编辑节点 - {editingNodesFile?.name}</DialogTitle>
+            <DialogDescription>
+              拖拽节点到不同的代理组，自定义每个组的节点列表
+            </DialogDescription>
+          </DialogHeader>
+          <div className='flex-1 overflow-y-auto py-4'>
+            <div className='flex gap-4 h-full'>
+              {/* 左侧：代理组 */}
+              <div className='flex-1 grid gap-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                {proxyGroups.map((group) => (
+                  <Card
+                    key={group.name}
+                    className={`flex flex-col transition-all duration-75 ${
+                      dragOverGroup === group.name
+                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
+                        : ''
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      handleDragEnterGroup(group.name)
+                    }}
+                    onDragLeave={handleDragLeaveGroup}
+                    onDrop={() => handleDrop(group.name)}
+                  >
+                    <CardHeader className='pb-3'>
+                      <div className='flex items-start justify-between gap-2'>
+                        <div className='flex-1 min-w-0'>
+                          <div
+                            draggable
+                            onDragStart={() => handleDragStart(group.name, null, -1)}
+                            onDragEnd={handleDragEnd}
+                            className='flex items-center gap-2 cursor-move group/title'
+                          >
+                            <GripVertical className='h-3 w-3 text-muted-foreground opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0' />
+                            <CardTitle className='text-base truncate'>{group.name}</CardTitle>
+                          </div>
+                          <CardDescription className='text-xs'>
+                            {group.type} ({(group.proxies || []).length} 个节点)
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className='flex-1 space-y-1 min-h-[200px]'>
+                      {(group.proxies || []).map((proxy, idx) => (
+                        proxy && (
+                          <div
+                            key={`${group.name}-${proxy}-${idx}`}
+                            draggable
+                            onDragStart={() => handleDragStart(proxy, group.name, idx)}
+                            onDragEnd={handleDragEnd}
+                            className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75'
+                          >
+                            <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                            <span className='text-sm truncate flex-1'>{proxy}</span>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-6 w-6 p-0 flex-shrink-0'
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveNodeFromGroup(group.name, idx)
+                              }}
+                            >
+                              <X className='h-4 w-4 text-muted-foreground hover:text-destructive' />
+                            </Button>
+                          </div>
+                        )
+                      ))}
+                      {(group.proxies || []).filter(p => p).length === 0 && (
+                        <div className={`text-sm text-center py-8 transition-colors ${
+                          dragOverGroup === group.name
+                            ? 'text-primary font-medium'
+                            : 'text-muted-foreground'
+                        }`}>
+                          将节点拖拽到这里
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* 分割线 */}
+              <div className='w-1 bg-border flex-shrink-0'></div>
+
+              {/* 右侧：可用节点 */}
+              <div className='w-64 flex-shrink-0 flex flex-col h-full'>
+                {/* 操作按钮 */}
+                <div className='flex-shrink-0 mb-4'>
+                  <div className='flex gap-2'>
+                    <Button variant='outline' onClick={() => setEditNodesDialogOpen(false)} className='flex-1'>
+                      取消
+                    </Button>
+                    <Button onClick={handleSaveNodes} className='flex-1' disabled={saveConfigMutation.isPending}>
+                      {saveConfigMutation.isPending ? '保存中...' : '应用并保存'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 显示/隐藏已添加节点按钮 */}
+                <div className='flex-shrink-0 mb-4'>
+                  <Button
+                    variant='outline'
+                    className='w-full'
+                    onClick={() => setShowAllNodes(!showAllNodes)}
+                  >
+                    {showAllNodes ? '隐藏已添加节点' : '显示已添加节点'}
+                  </Button>
+                </div>
+
+                <div className='flex-1 overflow-y-auto min-h-0'>
+                  <Card
+                    className={`transition-all duration-75 ${
+                      dragOverGroup === 'available'
+                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
+                        : ''
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      handleDragEnterGroup('available')
+                    }}
+                    onDragLeave={handleDragLeaveGroup}
+                    onDrop={handleDropToAvailable}
+                  >
+                    <CardHeader className='pb-3'>
+                      <CardTitle className='text-base'>可用节点</CardTitle>
+                      <CardDescription className='text-xs'>
+                        {availableNodes.length} 个节点
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className='space-y-1'>
+                      {availableNodes.map((proxy, idx) => (
+                        <div
+                          key={`available-${proxy}-${idx}`}
+                          draggable
+                          onDragStart={() => handleDragStart(proxy, 'available', idx)}
+                          onDragEnd={handleDragEnd}
+                          className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75'
+                        >
+                          <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                          <span className='text-sm truncate flex-1'>{proxy}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </main>

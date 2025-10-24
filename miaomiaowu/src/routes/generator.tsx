@@ -524,6 +524,7 @@ function SubscriptionGeneratorPage() {
       proxyGroupNames.add('DIRECT')
       proxyGroupNames.add('REJECT')
       proxyGroupNames.add('PROXY')
+      proxyGroupNames.add('no-resolve')
 
       // 替换 rules 中缺失的节点
       parsedConfig.rules = rules.map((rule: string) => {
