@@ -5,7 +5,7 @@ services:
     image: ghcr.io/jimleerx/miaomiaowu:latest
     container_name: traffic-info
     restart: unless-stopped
-
+    user: root
     environment:
       - PORT=8080
       - DATABASE_PATH=/app/data/traffic.db
