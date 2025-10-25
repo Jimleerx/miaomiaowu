@@ -238,6 +238,7 @@ type UserSettings struct {
 	CacheExpireMinutes  int    // Cache expiration time in minutes
 	SyncTraffic         bool   // Sync traffic info from external subscriptions
 	EnableProbeBinding  bool   // Enable probe server binding for nodes
+	CustomRulesEnabled  bool   // Enable custom rules feature
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }
@@ -256,6 +257,18 @@ type ExternalSubscription struct {
 	Expire      *time.Time // 过期时间
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+// CustomRule represents a custom rule for DNS, rules, or rule-providers.
+type CustomRule struct {
+	ID        int64
+	Name      string
+	Type      string // "dns", "rules", "rule-providers"
+	Mode      string // "replace", "prepend"
+	Content   string
+	Enabled   bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 var (
@@ -622,6 +635,31 @@ CREATE INDEX IF NOT EXISTS idx_external_subscriptions_url ON external_subscripti
 	}
 	if err := r.ensureExternalSubscriptionColumn("expire", "TIMESTAMP"); err != nil {
 		return err
+	}
+
+	// Add custom_rules_enabled to user_settings table
+	if err := r.ensureUserSettingsColumn("custom_rules_enabled", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+
+	const customRulesSchema = `
+CREATE TABLE IF NOT EXISTS custom_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('dns','rules','rule-providers')),
+    mode TEXT NOT NULL CHECK (mode IN ('replace','prepend')),
+    content TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(name, type)
+);
+CREATE INDEX IF NOT EXISTS idx_custom_rules_type ON custom_rules(type);
+CREATE INDEX IF NOT EXISTS idx_custom_rules_enabled ON custom_rules(enabled);
+`
+
+	if _, err := r.db.Exec(customRulesSchema); err != nil {
+		return fmt.Errorf("migrate custom_rules: %w", err)
 	}
 
 	return nil
@@ -2127,9 +2165,9 @@ func (r *TrafficRepository) GetUserSettings(ctx context.Context, username string
 		return settings, errors.New("username is required")
 	}
 
-	const stmt = `SELECT username, force_sync_external, COALESCE(match_rule, 'node_name'), COALESCE(cache_expire_minutes, 0), COALESCE(sync_traffic, 0), COALESCE(enable_probe_binding, 0), created_at, updated_at FROM user_settings WHERE username = ? LIMIT 1`
-	var forceSyncInt, syncTrafficInt, enableProbeBindingInt int
-	err := r.db.QueryRowContext(ctx, stmt, username).Scan(&settings.Username, &forceSyncInt, &settings.MatchRule, &settings.CacheExpireMinutes, &syncTrafficInt, &enableProbeBindingInt, &settings.CreatedAt, &settings.UpdatedAt)
+	const stmt = `SELECT username, force_sync_external, COALESCE(match_rule, 'node_name'), COALESCE(cache_expire_minutes, 0), COALESCE(sync_traffic, 0), COALESCE(enable_probe_binding, 0), COALESCE(custom_rules_enabled, 0), created_at, updated_at FROM user_settings WHERE username = ? LIMIT 1`
+	var forceSyncInt, syncTrafficInt, enableProbeBindingInt, customRulesEnabledInt int
+	err := r.db.QueryRowContext(ctx, stmt, username).Scan(&settings.Username, &forceSyncInt, &settings.MatchRule, &settings.CacheExpireMinutes, &syncTrafficInt, &enableProbeBindingInt, &customRulesEnabledInt, &settings.CreatedAt, &settings.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return settings, ErrUserSettingsNotFound
@@ -2140,6 +2178,7 @@ func (r *TrafficRepository) GetUserSettings(ctx context.Context, username string
 	settings.ForceSyncExternal = forceSyncInt == 1
 	settings.SyncTraffic = syncTrafficInt == 1
 	settings.EnableProbeBinding = enableProbeBindingInt == 1
+	settings.CustomRulesEnabled = customRulesEnabledInt == 1
 
 	return settings, nil
 }
@@ -2170,6 +2209,11 @@ func (r *TrafficRepository) UpsertUserSettings(ctx context.Context, settings Use
 		enableProbeBindingInt = 1
 	}
 
+	customRulesEnabledInt := 0
+	if settings.CustomRulesEnabled {
+		customRulesEnabledInt = 1
+	}
+
 	matchRule := strings.TrimSpace(settings.MatchRule)
 	if matchRule == "" {
 		matchRule = "node_name"
@@ -2181,18 +2225,19 @@ func (r *TrafficRepository) UpsertUserSettings(ctx context.Context, settings Use
 	}
 
 	const stmt = `
-		INSERT INTO user_settings (username, force_sync_external, match_rule, cache_expire_minutes, sync_traffic, enable_probe_binding, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO user_settings (username, force_sync_external, match_rule, cache_expire_minutes, sync_traffic, enable_probe_binding, custom_rules_enabled, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(username) DO UPDATE SET
 			force_sync_external = excluded.force_sync_external,
 			match_rule = excluded.match_rule,
 			cache_expire_minutes = excluded.cache_expire_minutes,
 			sync_traffic = excluded.sync_traffic,
 			enable_probe_binding = excluded.enable_probe_binding,
+			custom_rules_enabled = excluded.custom_rules_enabled,
 			updated_at = CURRENT_TIMESTAMP
 	`
 
-	if _, err := r.db.ExecContext(ctx, stmt, username, forceSyncInt, matchRule, cacheExpireMinutes, syncTrafficInt, enableProbeBindingInt); err != nil {
+	if _, err := r.db.ExecContext(ctx, stmt, username, forceSyncInt, matchRule, cacheExpireMinutes, syncTrafficInt, enableProbeBindingInt, customRulesEnabledInt); err != nil {
 		return fmt.Errorf("upsert user settings: %w", err)
 	}
 
@@ -2386,3 +2431,263 @@ func (r *TrafficRepository) DeleteExternalSubscription(ctx context.Context, id i
 
 	return nil
 }
+
+// Custom Rules CRUD operations
+
+var (
+	ErrCustomRuleNotFound = errors.New("custom rule not found")
+)
+
+// ListCustomRules returns all custom rules, optionally filtered by type.
+func (r *TrafficRepository) ListCustomRules(ctx context.Context, ruleType string) ([]CustomRule, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("traffic repository not initialized")
+	}
+
+	var query string
+	var args []interface{}
+
+	if ruleType != "" {
+		query = `SELECT id, name, type, mode, content, enabled, created_at, updated_at FROM custom_rules WHERE type = ? ORDER BY created_at DESC`
+		args = append(args, ruleType)
+	} else {
+		query = `SELECT id, name, type, mode, content, enabled, created_at, updated_at FROM custom_rules ORDER BY created_at DESC`
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list custom rules: %w", err)
+	}
+	defer rows.Close()
+
+	var rules []CustomRule
+	for rows.Next() {
+		var rule CustomRule
+		var enabled int
+		if err := rows.Scan(&rule.ID, &rule.Name, &rule.Type, &rule.Mode, &rule.Content, &enabled, &rule.CreatedAt, &rule.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan custom rule: %w", err)
+		}
+		rule.Enabled = enabled != 0
+		rules = append(rules, rule)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate custom rules: %w", err)
+	}
+
+	return rules, nil
+}
+
+// GetCustomRule returns a custom rule by ID.
+func (r *TrafficRepository) GetCustomRule(ctx context.Context, id int64) (*CustomRule, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("traffic repository not initialized")
+	}
+
+	if id <= 0 {
+		return nil, errors.New("custom rule id is required")
+	}
+
+	const query = `SELECT id, name, type, mode, content, enabled, created_at, updated_at FROM custom_rules WHERE id = ?`
+
+	var rule CustomRule
+	var enabled int
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&rule.ID, &rule.Name, &rule.Type, &rule.Mode, &rule.Content, &enabled, &rule.CreatedAt, &rule.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCustomRuleNotFound
+		}
+		return nil, fmt.Errorf("get custom rule: %w", err)
+	}
+
+	rule.Enabled = enabled != 0
+	return &rule, nil
+}
+
+// CreateCustomRule creates a new custom rule.
+func (r *TrafficRepository) CreateCustomRule(ctx context.Context, rule *CustomRule) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	if rule == nil {
+		return errors.New("custom rule is required")
+	}
+
+	rule.Name = strings.TrimSpace(rule.Name)
+	if rule.Name == "" {
+		return errors.New("custom rule name is required")
+	}
+
+	rule.Type = strings.TrimSpace(rule.Type)
+	if rule.Type != "dns" && rule.Type != "rules" && rule.Type != "rule-providers" {
+		return errors.New("custom rule type must be 'dns', 'rules', or 'rule-providers'")
+	}
+
+	rule.Mode = strings.TrimSpace(rule.Mode)
+	if rule.Type == "dns" {
+		rule.Mode = "replace"
+	} else if rule.Mode != "replace" && rule.Mode != "prepend" {
+		return errors.New("custom rule mode must be 'replace' or 'prepend'")
+	}
+
+	rule.Content = strings.TrimSpace(rule.Content)
+	if rule.Content == "" {
+		return errors.New("custom rule content is required")
+	}
+
+	const stmt = `INSERT INTO custom_rules (name, type, mode, content, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+
+	enabled := 0
+	if rule.Enabled {
+		enabled = 1
+	}
+
+	result, err := r.db.ExecContext(ctx, stmt, rule.Name, rule.Type, rule.Mode, rule.Content, enabled)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			return errors.New("custom rule with this name and type already exists")
+		}
+		return fmt.Errorf("create custom rule: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("get last insert id: %w", err)
+	}
+
+	rule.ID = id
+	return nil
+}
+
+// UpdateCustomRule updates an existing custom rule.
+func (r *TrafficRepository) UpdateCustomRule(ctx context.Context, rule *CustomRule) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	if rule == nil {
+		return errors.New("custom rule is required")
+	}
+
+	if rule.ID <= 0 {
+		return errors.New("custom rule id is required")
+	}
+
+	rule.Name = strings.TrimSpace(rule.Name)
+	if rule.Name == "" {
+		return errors.New("custom rule name is required")
+	}
+
+	rule.Type = strings.TrimSpace(rule.Type)
+	if rule.Type != "dns" && rule.Type != "rules" && rule.Type != "rule-providers" {
+		return errors.New("custom rule type must be 'dns', 'rules', or 'rule-providers'")
+	}
+
+	rule.Mode = strings.TrimSpace(rule.Mode)
+	if rule.Type == "dns" {
+		rule.Mode = "replace"
+	} else if rule.Mode != "replace" && rule.Mode != "prepend" {
+		return errors.New("custom rule mode must be 'replace' or 'prepend'")
+	}
+
+	rule.Content = strings.TrimSpace(rule.Content)
+	if rule.Content == "" {
+		return errors.New("custom rule content is required")
+	}
+
+	const stmt = `UPDATE custom_rules SET name = ?, type = ?, mode = ?, content = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+
+	enabled := 0
+	if rule.Enabled {
+		enabled = 1
+	}
+
+	result, err := r.db.ExecContext(ctx, stmt, rule.Name, rule.Type, rule.Mode, rule.Content, enabled, rule.ID)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			return errors.New("custom rule with this name and type already exists")
+		}
+		return fmt.Errorf("update custom rule: %w", err)
+	}
+
+	rows2, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+
+	if rows2 == 0 {
+		return ErrCustomRuleNotFound
+	}
+
+	return nil
+}
+
+// DeleteCustomRule deletes a custom rule by ID.
+func (r *TrafficRepository) DeleteCustomRule(ctx context.Context, id int64) error {
+	if r == nil || r.db == nil {
+		return errors.New("traffic repository not initialized")
+	}
+
+	if id <= 0 {
+		return errors.New("custom rule id is required")
+	}
+
+	const stmt = `DELETE FROM custom_rules WHERE id = ?`
+	result, err := r.db.ExecContext(ctx, stmt, id)
+	if err != nil {
+		return fmt.Errorf("delete custom rule: %w", err)
+	}
+
+	rows3, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+
+	if rows3 == 0 {
+		return ErrCustomRuleNotFound
+	}
+
+	return nil
+}
+
+// ListEnabledCustomRules returns all enabled custom rules, optionally filtered by type.
+func (r *TrafficRepository) ListEnabledCustomRules(ctx context.Context, ruleType string) ([]CustomRule, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("traffic repository not initialized")
+	}
+
+	var query string
+	var args []interface{}
+
+	if ruleType != "" {
+		query = `SELECT id, name, type, mode, content, enabled, created_at, updated_at FROM custom_rules WHERE type = ? AND enabled = 1 ORDER BY created_at DESC`
+		args = append(args, ruleType)
+	} else {
+		query = `SELECT id, name, type, mode, content, enabled, created_at, updated_at FROM custom_rules WHERE enabled = 1 ORDER BY created_at DESC`
+	}
+
+	rows4, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list enabled custom rules: %w", err)
+	}
+	defer rows4.Close()
+
+	var rules []CustomRule
+	for rows4.Next() {
+		var rule CustomRule
+		var enabled int
+		if err := rows4.Scan(&rule.ID, &rule.Name, &rule.Type, &rule.Mode, &rule.Content, &enabled, &rule.CreatedAt, &rule.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan custom rule: %w", err)
+		}
+		rule.Enabled = enabled != 0
+		rules = append(rules, rule)
+	}
+
+	if err := rows4.Err(); err != nil {
+		return nil, fmt.Errorf("iterate custom rules: %w", err)
+	}
+
+	return rules, nil
+}
+

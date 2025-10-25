@@ -16,6 +16,7 @@ type userConfigRequest struct {
 	CacheExpireMinutes int    `json:"cache_expire_minutes"`
 	SyncTraffic        bool   `json:"sync_traffic"`
 	EnableProbeBinding bool   `json:"enable_probe_binding"`
+	CustomRulesEnabled bool   `json:"custom_rules_enabled"`
 }
 
 type userConfigResponse struct {
@@ -24,6 +25,7 @@ type userConfigResponse struct {
 	CacheExpireMinutes int    `json:"cache_expire_minutes"`
 	SyncTraffic        bool   `json:"sync_traffic"`
 	EnableProbeBinding bool   `json:"enable_probe_binding"`
+	CustomRulesEnabled bool   `json:"custom_rules_enabled"`
 }
 
 func NewUserConfigHandler(repo *storage.TrafficRepository) http.Handler {
@@ -60,6 +62,7 @@ func handleGetUserConfig(w http.ResponseWriter, r *http.Request, repo *storage.T
 				CacheExpireMinutes: 0,
 				SyncTraffic:        false,
 				EnableProbeBinding: false,
+				CustomRulesEnabled: false,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -76,6 +79,7 @@ func handleGetUserConfig(w http.ResponseWriter, r *http.Request, repo *storage.T
 		CacheExpireMinutes: settings.CacheExpireMinutes,
 		SyncTraffic:        settings.SyncTraffic,
 		EnableProbeBinding: settings.EnableProbeBinding,
+		CustomRulesEnabled: settings.CustomRulesEnabled,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -113,6 +117,7 @@ func handleUpdateUserConfig(w http.ResponseWriter, r *http.Request, repo *storag
 		CacheExpireMinutes: cacheExpireMinutes,
 		SyncTraffic:        payload.SyncTraffic,
 		EnableProbeBinding: payload.EnableProbeBinding,
+		CustomRulesEnabled: payload.CustomRulesEnabled,
 	}
 
 	if err := repo.UpsertUserSettings(r.Context(), settings); err != nil {
@@ -126,6 +131,7 @@ func handleUpdateUserConfig(w http.ResponseWriter, r *http.Request, repo *storag
 		CacheExpireMinutes: settings.CacheExpireMinutes,
 		SyncTraffic:        settings.SyncTraffic,
 		EnableProbeBinding: settings.EnableProbeBinding,
+		CustomRulesEnabled: settings.CustomRulesEnabled,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

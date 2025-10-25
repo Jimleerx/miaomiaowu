@@ -19,11 +19,13 @@ import { Route as ProbeRouteImport } from './routes/probe'
 import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GeneratorRouteImport } from './routes/generator'
+import { Route as CustomRulesRouteImport } from './routes/custom-rules'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SubscriptionIndexRouteImport } from './routes/subscription.index'
 import { Route as SubscribeFilesIndexRouteImport } from './routes/subscribe-files.index'
 import { Route as NodesIndexRouteImport } from './routes/nodes.index'
+import { Route as CustomRulesIndexRouteImport } from './routes/custom-rules.index'
 import { Route as SubscribeFilesCustomRouteImport } from './routes/subscribe-files.custom'
 
 const UsersRoute = UsersRouteImport.update({
@@ -76,6 +78,11 @@ const GeneratorRoute = GeneratorRouteImport.update({
   path: '/generator',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CustomRulesRoute = CustomRulesRouteImport.update({
+  id: '/custom-rules',
+  path: '/custom-rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
@@ -101,6 +108,11 @@ const NodesIndexRoute = NodesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => NodesRoute,
 } as any)
+const CustomRulesIndexRoute = CustomRulesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CustomRulesRoute,
+} as any)
 const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
   id: '/custom',
   path: '/custom',
@@ -110,6 +122,7 @@ const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/custom-rules': typeof CustomRulesRouteWithChildren
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/nodes': typeof NodesRouteWithChildren
@@ -121,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
+  '/custom-rules/': typeof CustomRulesIndexRoute
   '/nodes/': typeof NodesIndexRoute
   '/subscribe-files/': typeof SubscribeFilesIndexRoute
   '/subscription/': typeof SubscriptionIndexRoute
@@ -136,6 +150,7 @@ export interface FileRoutesByTo {
   '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
+  '/custom-rules': typeof CustomRulesIndexRoute
   '/nodes': typeof NodesIndexRoute
   '/subscribe-files': typeof SubscribeFilesIndexRoute
   '/subscription': typeof SubscriptionIndexRoute
@@ -144,6 +159,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/custom-rules': typeof CustomRulesRouteWithChildren
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/nodes': typeof NodesRouteWithChildren
@@ -155,6 +171,7 @@ export interface FileRoutesById {
   '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
+  '/custom-rules/': typeof CustomRulesIndexRoute
   '/nodes/': typeof NodesIndexRoute
   '/subscribe-files/': typeof SubscribeFilesIndexRoute
   '/subscription/': typeof SubscriptionIndexRoute
@@ -164,6 +181,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/change-password'
+    | '/custom-rules'
     | '/generator'
     | '/login'
     | '/nodes'
@@ -175,6 +193,7 @@ export interface FileRouteTypes {
     | '/system-settings'
     | '/users'
     | '/subscribe-files/custom'
+    | '/custom-rules/'
     | '/nodes/'
     | '/subscribe-files/'
     | '/subscription/'
@@ -190,6 +209,7 @@ export interface FileRouteTypes {
     | '/system-settings'
     | '/users'
     | '/subscribe-files/custom'
+    | '/custom-rules'
     | '/nodes'
     | '/subscribe-files'
     | '/subscription'
@@ -197,6 +217,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/change-password'
+    | '/custom-rules'
     | '/generator'
     | '/login'
     | '/nodes'
@@ -208,6 +229,7 @@ export interface FileRouteTypes {
     | '/system-settings'
     | '/users'
     | '/subscribe-files/custom'
+    | '/custom-rules/'
     | '/nodes/'
     | '/subscribe-files/'
     | '/subscription/'
@@ -216,6 +238,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  CustomRulesRoute: typeof CustomRulesRouteWithChildren
   GeneratorRoute: typeof GeneratorRoute
   LoginRoute: typeof LoginRoute
   NodesRoute: typeof NodesRouteWithChildren
@@ -300,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GeneratorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/custom-rules': {
+      id: '/custom-rules'
+      path: '/custom-rules'
+      fullPath: '/custom-rules'
+      preLoaderRoute: typeof CustomRulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/change-password': {
       id: '/change-password'
       path: '/change-password'
@@ -335,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NodesIndexRouteImport
       parentRoute: typeof NodesRoute
     }
+    '/custom-rules/': {
+      id: '/custom-rules/'
+      path: '/'
+      fullPath: '/custom-rules/'
+      preLoaderRoute: typeof CustomRulesIndexRouteImport
+      parentRoute: typeof CustomRulesRoute
+    }
     '/subscribe-files/custom': {
       id: '/subscribe-files/custom'
       path: '/custom'
@@ -344,6 +381,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface CustomRulesRouteChildren {
+  CustomRulesIndexRoute: typeof CustomRulesIndexRoute
+}
+
+const CustomRulesRouteChildren: CustomRulesRouteChildren = {
+  CustomRulesIndexRoute: CustomRulesIndexRoute,
+}
+
+const CustomRulesRouteWithChildren = CustomRulesRoute._addFileChildren(
+  CustomRulesRouteChildren,
+)
 
 interface NodesRouteChildren {
   NodesIndexRoute: typeof NodesIndexRoute
@@ -384,6 +433,7 @@ const SubscriptionRouteWithChildren = SubscriptionRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  CustomRulesRoute: CustomRulesRouteWithChildren,
   GeneratorRoute: GeneratorRoute,
   LoginRoute: LoginRoute,
   NodesRoute: NodesRouteWithChildren,

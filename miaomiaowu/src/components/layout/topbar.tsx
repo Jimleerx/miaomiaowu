@@ -1,11 +1,12 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Link as LinkIcon, Radar, Users, Database, Zap, Network, Menu } from 'lucide-react'
+import { Activity, Link as LinkIcon, Radar, Users, Database, Zap, Network, Menu, FileCode } from 'lucide-react'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { UserMenu } from './user-menu'
 import { useAuthStore } from '@/stores/auth-store'
 import { profileQueryFn } from '@/lib/profile'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,8 +72,35 @@ export function Topbar() {
     staleTime: 5 * 60 * 1000,
   })
 
+  // Fetch user config to check if custom rules are enabled
+  const { data: userConfig } = useQuery({
+    queryKey: ['user-config'],
+    queryFn: async () => {
+      const response = await api.get('/api/user/config')
+      return response.data as {
+        custom_rules_enabled: boolean
+      }
+    },
+    enabled: Boolean(auth.accessToken) && Boolean(profile?.is_admin),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const isAdmin = Boolean(profile?.is_admin)
-  const navLinks = isAdmin ? [...baseNavLinks, ...adminNavLinks] : baseNavLinks
+  const customRulesEnabled = Boolean(userConfig?.custom_rules_enabled)
+
+  // Add custom rules link conditionally
+  const adminNavLinksWithCustomRules = customRulesEnabled
+    ? [
+        ...adminNavLinks,
+        {
+          title: '自定义规则',
+          to: '/custom-rules',
+          icon: FileCode,
+        },
+      ]
+    : adminNavLinks
+
+  const navLinks = isAdmin ? [...baseNavLinks, ...adminNavLinksWithCustomRules] : baseNavLinks
 
   return (
     <header className='border-b border-[color:rgba(241,140,110,0.22)] bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
@@ -142,7 +170,7 @@ export function Topbar() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align='start' className='w-48 pixel-border'>
-                {adminNavLinks.map(({ title, to, icon: Icon }) => (
+                {adminNavLinksWithCustomRules.map(({ title, to, icon: Icon }) => (
                   <DropdownMenuItem key={to} asChild>
                     <Link
                       to={to}

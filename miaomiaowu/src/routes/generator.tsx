@@ -233,10 +233,21 @@ function SubscriptionGeneratorPage() {
       templateConfig.proxies = proxies.map(proxy => reorderProxyFields(proxy))
 
       // 转换回 YAML
-      const finalConfig = yaml.dump(templateConfig, {
+      let finalConfig = yaml.dump(templateConfig, {
         lineWidth: -1,
         noRefs: true,
       })
+
+      // 应用自定义规则
+      try {
+        const applyRulesResponse = await api.post('/api/admin/apply-custom-rules', {
+          yaml_content: finalConfig
+        })
+        finalConfig = applyRulesResponse.data.yaml_content
+      } catch (error) {
+        console.error('Apply custom rules error:', error)
+        // 应用规则失败不影响主流程，继续使用原配置
+      }
 
       setClashConfig(finalConfig)
       setHasManuallyGrouped(false) // 加载模板后重置手动分组状态
@@ -292,7 +303,18 @@ function SubscriptionGeneratorPage() {
         selectedCategories,
         validCustomRules
       )
-      const generatedConfig = clashBuilder.build()
+      let generatedConfig = clashBuilder.build()
+
+      // 应用自定义规则
+      try {
+        const applyRulesResponse = await api.post('/api/admin/apply-custom-rules', {
+          yaml_content: generatedConfig
+        })
+        generatedConfig = applyRulesResponse.data.yaml_content
+      } catch (error) {
+        console.error('Apply custom rules error:', error)
+        // 应用规则失败不影响主流程，继续使用原配置
+      }
 
       setClashConfig(generatedConfig)
       setHasManuallyGrouped(true) // 自定义规则模式生成后自动标记为已分组

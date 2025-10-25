@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
-import { Upload, Download, Plus, Edit, Settings, FileText, Save, GripVertical, X, Layers } from 'lucide-react'
+import { Upload, Download, Plus, Edit, Settings, FileText, Save, GripVertical, X, Layers, Wand2 } from 'lucide-react'
 
 export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
@@ -308,6 +308,23 @@ function SubscribeFilesPage() {
     },
   })
 
+  // 应用自定义规则 mutation
+  const applyCustomRulesMutation = useMutation({
+    mutationFn: async (yamlContent: string) => {
+      const response = await api.post('/api/admin/apply-custom-rules', {
+        yaml_content: yamlContent,
+      })
+      return response.data
+    },
+    onSuccess: (data) => {
+      setConfigContent(data.yaml_content)
+      toast.success('自定义规则已应用，请点击保存生效')
+    },
+    onError: (error) => {
+      handleServerError(error)
+    },
+  })
+
   // 当文件内容加载完成时，更新编辑器
   useEffect(() => {
     if (!fileContentQuery.data) return
@@ -456,6 +473,21 @@ function SubscribeFilesPage() {
       return
     }
     saveConfigMutation.mutate({ filename: editingConfigFile.filename, content: configContent })
+  }
+
+  const handleApplyCustomRules = () => {
+    if (!configContent) {
+      toast.error('配置内容为空')
+      return
+    }
+    try {
+      parseYAML(configContent)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'YAML 解析失败'
+      toast.error('应用失败，当前配置 YAML 格式错误：' + message)
+      return
+    }
+    applyCustomRulesMutation.mutate(configContent)
   }
 
   const handleEditNodes = (file: SubscribeFile) => {
@@ -1087,6 +1119,15 @@ function SubscribeFilesPage() {
               <Button
                 variant='outline'
                 size='sm'
+                onClick={handleApplyCustomRules}
+                disabled={applyCustomRulesMutation.isPending || !configContent}
+              >
+                <Wand2 className='mr-2 h-4 w-4' />
+                {applyCustomRulesMutation.isPending ? '应用中...' : '应用自定义规则'}
+              </Button>
+              <Button
+                variant='outline'
+                size='sm'
                 onClick={() => handleEditNodes(editingConfigFile!)}
               >
                 <Edit className='mr-2 h-4 w-4' />
@@ -1121,6 +1162,7 @@ function SubscribeFilesPage() {
             <div className='rounded-lg border bg-muted/50 p-4'>
               <h3 className='mb-2 font-semibold'>使用说明</h3>
               <ul className='space-y-1 text-sm text-muted-foreground'>
+                <li>• 点击"应用自定义规则"按钮可将自定义规则应用到配置中</li>
                 <li>• 点击"保存"按钮将修改保存到配置文件</li>
                 <li>• 支持直接编辑 YAML 内容</li>
                 <li>• 保存前会自动验证 YAML 格式</li>
