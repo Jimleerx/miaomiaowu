@@ -196,7 +196,7 @@ func (p *URIProducer) encodeVLESS(proxy Proxy) (string, error) {
 	params.Set("security", security)
 
 	// SNI
-	if sni := GetString(proxy, "sni"); sni != "" {
+	if sni := GetString(proxy, "servername"); sni != "" {
 		params.Set("sni", sni)
 	}
 

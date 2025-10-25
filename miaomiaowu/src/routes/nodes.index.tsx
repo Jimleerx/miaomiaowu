@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { parseProxyUrl, toClashProxy, type ProxyNode, type ClashProxy } from '@/lib/proxy-parser'
-import { Check, Pencil, X, Undo2, Activity } from 'lucide-react'
+import { Check, Pencil, X, Undo2, Activity, Eye } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import IpIcon from '@/assets/icons/ip.svg'
 
@@ -846,15 +846,14 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                         <TableHead className='min-w-[150px]'>节点名称</TableHead>
                         <TableHead className='w-[100px]'>标签</TableHead>
                         <TableHead className='min-w-[200px]'>服务器地址</TableHead>
-                        <TableHead className='min-w-[200px]'>Clash 配置</TableHead>
-                        <TableHead className='w-[80px] text-center'>启用</TableHead>
+                        <TableHead className='w-[80px] text-center'>配置</TableHead>
                         <TableHead className='w-[100px] text-center'>操作</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredNodes.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className='text-center text-muted-foreground py-8'>
+                          <TableCell colSpan={6} className='text-center text-muted-foreground py-8'>
                             没有找到匹配的节点
                           </TableCell>
                         </TableRow>
@@ -1066,14 +1065,12 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className='text-center'>
                               {node.clash ? (
                                 <Dialog>
                                   <DialogTrigger asChild>
-                                    <Button variant='ghost' size='sm' className='h-auto py-1 px-2'>
-                                      <div className='text-xs font-mono text-left truncate max-w-[180px]'>
-                                        {JSON.stringify(node.clash).substring(0, 50)}...
-                                      </div>
+                                    <Button variant='ghost' size='icon' className='h-8 w-8'>
+                                      <Eye className='h-4 w-4' />
                                     </Button>
                                   </DialogTrigger>
                                   <DialogContent className='max-w-2xl max-h-[80vh] overflow-auto'>
@@ -1091,20 +1088,7 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                   </DialogContent>
                                 </Dialog>
                               ) : (
-                                <span className='text-xs text-muted-foreground'>转换失败</span>
-                              )}
-                            </TableCell>
-                            <TableCell className='text-center'>
-                              {node.isSaved ? (
-                                <Switch
-                                  checked={node.enabled}
-                                  onCheckedChange={() => handleToggle(node.dbId)}
-                                />
-                              ) : (
-                                <Switch
-                                  checked={node.enabled}
-                                  disabled={true}
-                                />
+                                <span className='text-xs text-muted-foreground'>-</span>
                               )}
                             </TableCell>
                             <TableCell className='text-center'>
