@@ -682,6 +682,10 @@ function SubscriptionGeneratorPage() {
               proxies: newProxies
             }
           } else {
+            // 防止代理组添加到自己内部
+            if (draggedItem.proxy === targetGroupName) {
+              return group
+            }
             // 检查是否已存在
             if (!group.proxies.includes(draggedItem.proxy)) {
               const newProxies = [...group.proxies]

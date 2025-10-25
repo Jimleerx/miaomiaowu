@@ -593,6 +593,11 @@ function SubscribeFilesPage() {
             }
           })
         } else {
+          // 防止代理组添加到自己内部
+          if (draggedNode.name === toGroup) {
+            handleDragEnd()
+            return
+          }
           // 检查节点是否已存在于目标组中
           if (!updatedGroups[toGroupIndex].proxies.includes(draggedNode.name)) {
             updatedGroups[toGroupIndex].proxies.push(draggedNode.name)
@@ -1072,7 +1077,7 @@ function SubscribeFilesPage() {
           setConfigContent('')
         }
       }}>
-        <DialogContent className='!max-w-[80vw] w-[80vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '50vw', width: '50vw' }}>
+        <DialogContent className='!max-w-[80vw] w-[80vw] max-h-[90vh] flex flex-col'>
           <DialogHeader>
             <DialogTitle>编辑配置 - {editingConfigFile?.name}</DialogTitle>
             <DialogDescription>
