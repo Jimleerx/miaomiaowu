@@ -72,13 +72,13 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
-            output: traffic-info-linux-amd64
+            output: mmw-linux-amd64
           - goos: linux
             goarch: arm64
-            output: traffic-info-linux-arm64
+            output: mmw-linux-arm64
           - goos: windows
             goarch: amd64
-            output: traffic-info-windows-amd64.exe
+            output: mmw-windows-amd64.exe
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -181,32 +181,32 @@ jobs:
       - name: Download Linux AMD64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: traffic-info-linux-amd64
+          name: mmw-linux-amd64
           path: release
 
       - name: Download Linux ARM64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: traffic-info-linux-arm64
+          name: mmw-linux-arm64
           path: release
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: traffic-info-windows-amd64.exe
+          name: mmw-windows-amd64.exe
           path: release
 
       - name: Add executable permissions
         run: |
-          chmod +x release/traffic-info-linux-amd64
-          chmod +x release/traffic-info-linux-arm64
+          chmod +x release/mmw-linux-amd64
+          chmod +x release/mmw-linux-arm64
 
       - name: Create checksums
         run: |
           cd release
-          sha256sum traffic-info-linux-amd64 > checksums.txt
-          sha256sum traffic-info-linux-arm64 >> checksums.txt
-          sha256sum traffic-info-windows-amd64.exe >> checksums.txt
+          sha256sum mmw-linux-amd64 > checksums.txt
+          sha256sum mmw-linux-arm64 >> checksums.txt
+          sha256sum mmw-windows-amd64.exe >> checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -215,9 +215,9 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            release/traffic-info-linux-amd64
-            release/traffic-info-linux-arm64
-            release/traffic-info-windows-amd64.exe
+            release/mmw-linux-amd64
+            release/mmw-linux-arm64
+            release/mmw-windows-amd64.exe
             release/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

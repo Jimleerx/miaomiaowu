@@ -46,7 +46,7 @@ echo.
 echo [2/3] 构建 Linux 版本后端...
 set GOOS=linux
 set GOARCH=amd64
-go build -ldflags="-s -w" -o %BUILD_DIR%\traffic-info-linux-amd64 cmd\server\main.go cmd\server\cors.go
+go build -ldflags="-s -w" -o %BUILD_DIR%\mmw-linux-amd64 cmd\server\main.go cmd\server\cors.go
 if errorlevel 1 (
     echo Linux 后端构建失败！
     exit /b 1
@@ -58,7 +58,7 @@ echo.
 echo [3/3] 构建 Windows 版本后端...
 set GOOS=windows
 set GOARCH=amd64
-go build -ldflags="-s -w" -o %BUILD_DIR%\traffic-info-windows-amd64.exe cmd\server\main.go cmd\server\cors.go
+go build -ldflags="-s -w" -o %BUILD_DIR%\mmw-windows-amd64.exe cmd\server\main.go cmd\server\cors.go
 if errorlevel 1 (
     echo Windows 后端构建失败！
     exit /b 1
@@ -73,7 +73,7 @@ mkdir "%BUILD_DIR%\data" 2>nul
 mkdir "%BUILD_DIR%\subscribes" 2>nul
 
 REM 复制 Windows 版本到 release 目录
-copy "%BUILD_DIR%\traffic-info-windows-amd64.exe" "%OUTPUT_DIR%\windows\" >nul
+copy "%BUILD_DIR%\mmw-windows-amd64.exe" "%OUTPUT_DIR%\windows\" >nul
 if exist "data" (
     xcopy "data" "%OUTPUT_DIR%\windows\data\" /E /I /Y >nul 2>&1
 )
@@ -98,7 +98,7 @@ echo 构建完成！
 echo ========================================
 echo.
 echo 输出文件:
-echo   - Linux:   %BUILD_DIR%\traffic-info-linux-amd64
-echo   - Windows: %BUILD_DIR%\traffic-info-windows-amd64.exe
+echo   - Linux:   %BUILD_DIR%\mmw-linux-amd64
+echo   - Windows: %BUILD_DIR%\mmw-windows-amd64.exe
 echo   - Release: %OUTPUT_DIR%\windows\
 echo.

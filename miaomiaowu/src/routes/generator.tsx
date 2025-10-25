@@ -764,7 +764,7 @@ function SubscriptionGeneratorPage() {
     <div className='flex min-h-screen flex-col bg-background'>
       <Topbar />
 
-      <main className='container mx-auto flex-1 px-4 py-8'>
+      <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
         <div className='mx-auto max-w-5xl space-y-6'>
           <div className='space-y-2'>
             <h1 className='text-3xl font-bold tracking-tight'>订阅链接生成器</h1>
@@ -823,11 +823,27 @@ function SubscriptionGeneratorPage() {
                         </TableHead>
                         <TableHead>节点名称</TableHead>
                         <TableHead className='w-[100px]'>协议</TableHead>
+                        <TableHead className='min-w-[150px]'>服务器地址</TableHead>
                         <TableHead className='w-[100px]'>标签</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredNodes.map((node) => (
+                      {filteredNodes.map((node) => {
+                        // 从 clash_config 中提取服务器地址
+                        let serverAddress = '-'
+                        try {
+                          if (node.clash_config) {
+                            const clashConfig = JSON.parse(node.clash_config)
+                            if (clashConfig.server) {
+                              const port = clashConfig.port ? `:${clashConfig.port}` : ''
+                              serverAddress = `${clashConfig.server}${port}`
+                            }
+                          }
+                        } catch (e) {
+                          // 解析失败，使用默认值
+                        }
+
+                        return (
                         <TableRow key={node.id}>
                           <TableCell>
                             <Checkbox
@@ -839,6 +855,7 @@ function SubscriptionGeneratorPage() {
                           <TableCell>
                             <Badge variant='outline'>{node.protocol.toUpperCase()}</Badge>
                           </TableCell>
+                          <TableCell className='font-mono text-sm'>{serverAddress}</TableCell>
                           <TableCell>
                             <div className='flex flex-wrap gap-1'>
                               {node.tag && (
@@ -855,7 +872,8 @@ function SubscriptionGeneratorPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                     </TableBody>
                   </Table>
                   </div>

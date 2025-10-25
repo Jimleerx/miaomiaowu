@@ -52,7 +52,7 @@ docker run -d \
 
 参数说明：
 - `-p 8080:8080` 将容器端口映射到宿主机，按需调整。
-- `-v ./traffic-info-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
+- `-v ./mmw-data:/app/data` 持久化数据库文件，防止容器重建时数据丢失。
 - `-v ./subscribes:/app/subscribes` 订阅文件存放目录
 - `-v ./rule_templates:/app/rule_templates` 规则模板存放目录
 - `-e JWT_SECRET=your-secret` 可选参数，配置token密钥，建议改成随机字符串
@@ -61,7 +61,7 @@ docker run -d \
 更新镜像后可执行：
 ```bash
 docker pull ghcr.io/jimleerx/miaomiaowu:latest
-docker stop traffic-info && docker rm traffic-info
+docker stop miaomiaowu && docker rm miaomiaowu
 ```
 然后按照上方命令重新启动服务。
 
@@ -73,9 +73,9 @@ docker stop traffic-info && docker rm traffic-info
 version: '3.8'
 
 services:
-  traffic-info:
+  miaomiaowu:
     image: ghcr.io/jimleerx/miaomiaowu:latest
-    container_name: traffic-info
+    container_name: miaomiaowu
     restart: unless-stopped
     user: root
     environment:
@@ -108,7 +108,7 @@ services:
 映射目录说明:
 ```
 volumes:     #这是挂载下面这三个目录到宿主机的，如果你不知道这三个目录是干嘛的，不需要添加
-  - ./traffic-info-data:/app/data #持久化数据库文件，防止容器重建时数据丢失。
+  - ./mmw-data:/app/data #持久化数据库文件，防止容器重建时数据丢失。
   - ./subscribes:/app/subscribes #订阅文件存放目录
   - ./rule_templates:/app/rule_templates #规则模板存放目录
 ```
@@ -142,7 +142,7 @@ docker-compose down
 **重要提示**：请确保定期备份这两个目录的数据。
 
 ### 方式 2：一键安装（Linux）
-#### ⚠ 注意：0.1.0版本修改了服务名称，无法通过脚本更新，只能重新安装
+#### ⚠ 注意：0.1.1版本修改了服务名称，无法通过脚本更新，只能重新安装
 #### 先执行以下命令卸载及转移数据
 旧服务卸载及备份转移
 ```
@@ -172,7 +172,7 @@ curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh |
 curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh | bash
 
 # 运行服务
-./traffic-info
+./mmw
 ```
 
 **更新简易安装版本：**
@@ -185,22 +185,22 @@ curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-instal
 **Linux：**
 ```bash
 # 下载二进制文件（修改版本号为所需版本）
-wget https://github.com/Jimleerx/miaomiaowu/releases/download/v0.0.2/traffic-info-linux-amd64
+wget https://github.com/Jimleerx/miaomiaowu/releases/download/v0.0.2/mmw-linux-amd64
 
 # 添加执行权限
-chmod +x traffic-info-linux-amd64
+chmod +x mmw-linux-amd64
 
 # 运行
-./traffic-info-linux-amd64
+./mmw-linux-amd64
 ```
 
 **Windows：**
 ```powershell
-# 从 Releases 页面下载 traffic-info-windows-amd64.exe
+# 从 Releases 页面下载 mmw-windows-amd64.exe
 # https://github.com/Jimleerx/miaomiaowu/releases
 
 # 双击运行或在命令行中执行
-.\traffic-info-windows-amd64.exe
+.\mmw-windows-amd64.exe
 ```
 ### 页面截图
 ![image](https://github.com/Jimleerx/miaomiaowu/blob/main/screenshots/traffic_info.png)  
@@ -229,20 +229,20 @@ chmod +x traffic-info-linux-amd64
 #### Linux
 ```bash
 # 下载二进制文件
-wget https://github.com/Jimleerx/traffic-info/releases/latest/download/traffic-info-linux-amd64
+wget https://github.com/Jimleerx/traffic-info/releases/latest/download/mmw-linux-amd64
 
 # 添加执行权限
-chmod +x traffic-info-linux-amd64
+chmod +x mmw-linux-amd64
 
 # 运行
-./traffic-info-linux-amd64
+./mmw-linux-amd64
 ```
 
 #### Windows
 ```powershell
-# 下载 traffic-info-windows-amd64.exe
+# 下载 mmw-windows-amd64.exe
 # 双击运行或在命令行中执行
-.\traffic-info-windows-amd64.exe
+.\mmw-windows-amd64.exe
 ```
 
 ### 首次配置
@@ -299,89 +299,6 @@ LOG_LEVEL=info
 - 流量记录表
 - 订阅配置表
 
-### 订阅规则配置
-
-系统支持自定义订阅规则（YAML 格式），支持以下客户端：
-- Clash/ClashX
-- Clash Meta
-- Shadowrocket
-
-规则配置示例参见「规则配置」页面。
-
-## API 文档
-
-### 认证接口
-
-#### 登录
-```http
-POST /api/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "password"
-}
-```
-
-#### 刷新令牌
-```http
-POST /api/refresh
-Authorization: Bearer <refresh_token>
-```
-
-### 流量统计
-
-#### 获取流量摘要
-```http
-GET /api/traffic/summary
-Authorization: Bearer <access_token>
-```
-
-响应：
-```json
-{
-  "metrics": {
-    "total_limit_gb": 1000.00,
-    "total_used_gb": 256.50,
-    "total_remaining_gb": 743.50,
-    "usage_percentage": 25.65
-  },
-  "history": [
-    {
-      "date": "2025-10-01",
-      "used_gb": 8.52
-    }
-  ]
-}
-```
-
-### 探针配置
-
-#### 获取探针配置
-```http
-GET /api/admin/probe/config
-Authorization: Bearer <access_token>
-```
-
-#### 更新探针配置
-```http
-PUT /api/admin/probe/config
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "probe_type": "nezha",
-  "address": "https://probe.example.com",
-  "servers": [
-    {
-      "server_id": "1",
-      "name": "Server 1",
-      "traffic_method": "both",
-      "monthly_traffic_gb": 100
-    }
-  ]
-}
-```
 
 ## 开发指南
 
@@ -532,8 +449,12 @@ MIT License
 
 - 问题反馈：[GitHub Issues](https://github.com/Jimleerx/traffic-info/issues)
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
-
+- 🛠️ vless节点转v2ray时servername没有转换成sni
 ## 更新日志
+## 更新日志
+### v0.1.1 (2025-10-25)
+- 🌈 订阅管理编辑订阅时支持重新分配节点
+- 😊 优化节点拖动页面，现在用节点支持整组拖动
 ### v0.1.0 (2025-10-24)
 - 🌈 增加版本号显示与新版本提示角标
 - 😊 优化链式代理配置流程，代理组现在也可拖动

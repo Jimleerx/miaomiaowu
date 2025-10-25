@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  traffic-info:
+  miaomiaowu:
     image: ghcr.io/jimleerx/miaomiaowu:latest
-    container_name: traffic-info
+    container_name: miaomiaowu
     restart: unless-stopped
     user: root
     environment:

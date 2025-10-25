@@ -34,13 +34,13 @@ echo "前端构建完成 ✓"
 # 2. 构建 Go 后端 (Linux)
 echo ""
 echo "[2/3] 构建 Linux 版本后端..."
-GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o "${BUILD_DIR}/traffic-info-server-linux-amd64" cmd/server/main.go cmd/server/cors.go
+GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o "${BUILD_DIR}/mmw-linux-amd64" cmd/server/main.go cmd/server/cors.go
 echo "Linux 后端构建完成 ✓"
 
 # 3. 构建 Go 后端 (Windows)
 echo ""
 echo "[3/3] 构建 Windows 版本后端..."
-GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "${BUILD_DIR}/traffic-info-windows-amd64.exe" cmd/server/main.go cmd/server/cors.go
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "${BUILD_DIR}/mmw-windows-amd64.exe" cmd/server/main.go cmd/server/cors.go
 echo "Windows 后端构建完成 ✓"
 
 # 4. 准备发布文件
@@ -52,8 +52,8 @@ mkdir -p "${BUILD_DIR}/data"
 mkdir -p "${BUILD_DIR}/subscribes"
 
 # 复制 Linux 版本到 release 目录
-cp "${BUILD_DIR}/traffic-info-server-linux-amd64" "${OUTPUT_DIR}/linux/"
-chmod +x "${OUTPUT_DIR}/linux/traffic-info-server-linux-amd64"
+cp "${BUILD_DIR}/mmw-linux-amd64" "${OUTPUT_DIR}/linux/"
+chmod +x "${OUTPUT_DIR}/linux/mmw-linux-amd64"
 if [ -d "data" ]; then
     cp -r "data" "${OUTPUT_DIR}/linux/"
 fi
@@ -65,7 +65,7 @@ if [ -d "config" ]; then
 fi
 
 # 复制 Windows 版本到 release 目录
-cp "${BUILD_DIR}/traffic-info-windows-amd64.exe" "${OUTPUT_DIR}/windows/"
+cp "${BUILD_DIR}/mmw-windows-amd64.exe" "${OUTPUT_DIR}/windows/"
 if [ -d "data" ]; then
     cp -r "data" "${OUTPUT_DIR}/windows/"
 fi
@@ -90,7 +90,7 @@ echo "构建完成！"
 echo "========================================"
 echo ""
 echo "输出文件:"
-echo "  - Linux:   ${BUILD_DIR}/traffic-info-server-linux-amd64"
-echo "  - Windows: ${BUILD_DIR}/traffic-info-windows-amd64.exe"
+echo "  - Linux:   ${BUILD_DIR}/mmw-linux-amd64"
+echo "  - Windows: ${BUILD_DIR}/mmw-windows-amd64.exe"
 echo "  - Release: ${OUTPUT_DIR}/"
 echo ""

@@ -6,7 +6,7 @@
 set -e
 
 # 配置
-VERSION="v0.1.0"
+VERSION="v0.1.1"
 GITHUB_REPO="Jimleerx/miaomiaowu"
 BINARY_NAME=""  # 将根据架构自动设置
 INSTALL_DIR="/usr/local/bin"
@@ -48,11 +48,11 @@ check_architecture() {
 
     case "$ARCH" in
         x86_64|amd64)
-            BINARY_NAME="traffic-info-linux-amd64"
+            BINARY_NAME="mmw-linux-amd64"
             echo_info "使用 AMD64 版本"
             ;;
         aarch64|arm64)
-            BINARY_NAME="traffic-info-linux-arm64"
+            BINARY_NAME="mmw-linux-arm64"
             echo_info "使用 ARM64 版本"
             ;;
         *)

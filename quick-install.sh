@@ -3,7 +3,7 @@
 
 set -e
 
-VERSION="v0.1.0"
+VERSION="v0.1.1"
 GITHUB_REPO="Jimleerx/miaomiaowu"
 VERSION_FILE=".version"
 
@@ -11,10 +11,10 @@ VERSION_FILE=".version"
 ARCH=$(uname -m)
 case "$ARCH" in
     x86_64|amd64)
-        BINARY_NAME="traffic-info-linux-amd64"
+        BINARY_NAME="mmw-linux-amd64"
         ;;
     aarch64|arm64)
-        BINARY_NAME="traffic-info-linux-arm64"
+        BINARY_NAME="mmw-linux-arm64"
         ;;
     *)
         echo "❌ 不支持的架构: $ARCH"
@@ -30,10 +30,10 @@ install() {
     echo "正在下载并安装妙妙屋 $VERSION ($ARCH)..."
 
     # 下载
-    wget -q --show-progress "$DOWNLOAD_URL" -O traffic-info
+    wget -q --show-progress "$DOWNLOAD_URL" -O mmw
 
     # 赋予执行权限
-    chmod +x traffic-info
+    chmod +x mmw
 
     # 创建数据目录
     mkdir -p data
@@ -55,7 +55,7 @@ install() {
 
     # 设置环境变量并运行
     export PORT=$PORT
-    nohup ./traffic-info > traffic-info.log 2>&1 &
+    nohup ./mmw > mmw.log 2>&1 &
 
     # 显示完成信息
     echo ""
@@ -74,8 +74,8 @@ update() {
     echo ""
 
     # 检查是否已安装
-    if [ ! -f "traffic-info" ]; then
-        echo "❌ 未检测到已安装的 traffic-info，请先运行安装"
+    if [ ! -f "mmw" ]; then
+        echo "❌ 未检测到已安装的 mmw，请先运行安装"
         exit 1
     fi
 
@@ -88,24 +88,24 @@ update() {
     echo ""
 
     # 查找并停止运行中的进程
-    if pgrep -f "./traffic-info" > /dev/null; then
+    if pgrep -f "./mmw" > /dev/null; then
         echo "停止运行中的服务..."
-        pkill -f "./traffic-info" || true
+        pkill -f "./mmw" || true
         sleep 2
     fi
 
     # 备份当前版本
-    if [ -f "traffic-info" ]; then
+    if [ -f "mmw" ]; then
         echo "备份当前版本..."
-        cp traffic-info traffic-info.bak
+        cp mmw mmw.bak
     fi
 
     # 下载新版本
     echo "下载新版本..."
-    wget -q --show-progress "$DOWNLOAD_URL" -O traffic-info
+    wget -q --show-progress "$DOWNLOAD_URL" -O mmw
 
     # 赋予执行权限
-    chmod +x traffic-info
+    chmod +x mmw
 
     # 保存版本信息
     echo "$VERSION" > "$VERSION_FILE"
@@ -124,7 +124,7 @@ update() {
 
     # 设置环境变量并运行
     export PORT=$PORT
-    nohup ./traffic-info > traffic-info.log 2>&1 &
+    nohup ./mmw > mmw.log 2>&1 &
 
     echo ""
     echo "✅ 更新完成！"
@@ -133,13 +133,13 @@ update() {
     echo "🌐 访问地址: http://localhost:$PORT"
     echo ""
     echo "运行服务:"
-    echo "  PORT=$PORT ./traffic-info"
+    echo "  PORT=$PORT ./mmw"
     echo ""
     echo "后台运行:"
-    echo "  PORT=$PORT nohup ./traffic-info > traffic-info.log 2>&1 &"
+    echo "  PORT=$PORT nohup ./mmw > mmw.log 2>&1 &"
     echo ""
     echo "如遇问题可回滚到备份版本:"
-    echo "  mv traffic-info.bak traffic-info"
+    echo "  mv mmw.bak mmw"
     echo ""
 }
 
