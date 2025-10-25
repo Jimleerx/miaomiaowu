@@ -94,9 +94,9 @@ func main() {
 	mux.Handle("/api/admin/nodes", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo, subscribeDir)))
 	mux.Handle("/api/admin/nodes/", auth.RequireAdmin(tokenStore, userRepo, handler.NewNodesHandler(repo, subscribeDir)))
 	mux.Handle("/api/admin/rules/latest", auth.RequireAdmin(tokenStore, userRepo, handler.NewRuleMetadataHandler(subscribeDir, repo)))
-	mux.Handle("/api/admin/custom-rules", auth.RequireAdmin(tokenStore, handler.NewCustomRulesHandler(repo)))
-	mux.Handle("/api/admin/custom-rules/", auth.RequireAdmin(tokenStore, handler.NewCustomRuleHandler(repo)))
-	mux.Handle("/api/admin/apply-custom-rules", auth.RequireAdmin(tokenStore, handler.NewApplyCustomRulesHandler(repo)))
+	mux.Handle("/api/admin/custom-rules", auth.RequireAdmin(tokenStore, userRepo, handler.NewCustomRulesHandler(repo)))
+	mux.Handle("/api/admin/custom-rules/", auth.RequireAdmin(tokenStore, userRepo, handler.NewCustomRuleHandler(repo)))
+	mux.Handle("/api/admin/apply-custom-rules", auth.RequireAdmin(tokenStore, userRepo, handler.NewApplyCustomRulesHandler(repo)))
 
 	// User endpoints (all authenticated users)
 	mux.Handle("/api/user/password", auth.RequireToken(tokenStore, handler.NewPasswordHandler(authManager)))
