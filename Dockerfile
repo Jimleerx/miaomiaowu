@@ -45,7 +45,7 @@ COPY --from=frontend-builder /app/internal/web/dist ./internal/web/dist
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -trimpath \
     -ldflags="-s -w" \
-    -o /app/miaomiaowu \
+    -o /app/server \
     ./cmd/server
 
 # Final stage
@@ -61,7 +61,7 @@ RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser
 
 # Copy binary from builder
-COPY --from=backend-builder /app/miaomiaowu /app/miaomiaowu
+COPY --from=backend-builder /app/server /app/server
 
 # Copy rule templates directory
 COPY --from=backend-builder /app/rule_templates /app/rule_templates
@@ -71,7 +71,7 @@ COPY docker-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Set proper ownership for app files
-RUN chown -R appuser:appuser /app/miaomiaowu /app/rule_templates
+RUN chown -R appuser:appuser /app/server /app/rule_templates
 
 # Volume for persistent data
 VOLUME ["/app/data", "/app/subscribes"]
@@ -87,4 +87,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the application
-CMD ["/app/miaomiaowu"]
+CMD ["/app/server"]
