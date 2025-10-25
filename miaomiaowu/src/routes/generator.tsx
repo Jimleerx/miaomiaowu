@@ -654,8 +654,8 @@ function SubscriptionGeneratorPage() {
 
     setProxyGroups(groups => {
       const newGroups = groups.map(group => {
-        // 从源组中移除
-        if (group.name === draggedItem.sourceGroup) {
+        // 从源组中移除（只有从代理组拖动时才移除，从可用节点拖动时不移除）
+        if (group.name === draggedItem.sourceGroup && draggedItem.sourceGroup !== null && draggedItem.proxy !== '__AVAILABLE_PROXIES__') {
           return {
             ...group,
             proxies: group.proxies.filter((_, idx) => idx !== draggedItem.sourceIndex)
@@ -667,19 +667,35 @@ function SubscriptionGeneratorPage() {
       // 添加到目标组
       return newGroups.map(group => {
         if (group.name === targetGroupName) {
-          // 检查是否已存在
-          if (!group.proxies.includes(draggedItem.proxy)) {
+          // 特殊处理：如果拖动的是"可用节点"标题，添加所有可用节点
+          if (draggedItem.proxy === '__AVAILABLE_PROXIES__') {
+            const specialNodes = ['♻️ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
             const newProxies = [...group.proxies]
-            if (targetIndex !== undefined) {
-              // 插入到指定位置
-              newProxies.splice(targetIndex, 0, draggedItem.proxy)
-            } else {
-              // 添加到末尾
-              newProxies.push(draggedItem.proxy)
-            }
+            availableProxies.forEach(proxyName => {
+              // 过滤掉特殊节点
+              if (!newProxies.includes(proxyName) && !specialNodes.includes(proxyName)) {
+                newProxies.push(proxyName)
+              }
+            })
             return {
               ...group,
               proxies: newProxies
+            }
+          } else {
+            // 检查是否已存在
+            if (!group.proxies.includes(draggedItem.proxy)) {
+              const newProxies = [...group.proxies]
+              if (targetIndex !== undefined) {
+                // 插入到指定位置
+                newProxies.splice(targetIndex, 0, draggedItem.proxy)
+              } else {
+                // 添加到末尾
+                newProxies.push(draggedItem.proxy)
+              }
+              return {
+                ...group,
+                proxies: newProxies
+              }
             }
           }
         }
@@ -1190,10 +1206,20 @@ function SubscriptionGeneratorPage() {
                     onDrop={handleDropToAvailable}
                   >
                     <CardHeader className='pb-3'>
-                      <CardTitle className='text-base'>可用节点</CardTitle>
-                      <CardDescription className='text-xs'>
-                        {availableProxies.length} 个节点
-                      </CardDescription>
+                      <div
+                        draggable
+                        onDragStart={() => handleDragStart('__AVAILABLE_PROXIES__', null, -1)}
+                        onDragEnd={handleDragEnd}
+                        className='flex items-center gap-2 cursor-move'
+                      >
+                        <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                        <div>
+                          <CardTitle className='text-base'>可用节点</CardTitle>
+                          <CardDescription className='text-xs'>
+                            {availableProxies.length} 个节点
+                          </CardDescription>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent className='space-y-1'>
                       {availableProxies.map((proxy, idx) => (

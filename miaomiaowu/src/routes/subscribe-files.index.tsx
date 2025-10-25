@@ -81,7 +81,7 @@ function SubscribeFilesPage() {
   const [editNodesDialogOpen, setEditNodesDialogOpen] = useState(false)
   const [editingNodesFile, setEditingNodesFile] = useState<SubscribeFile | null>(null)
   const [proxyGroups, setProxyGroups] = useState<Array<{ name: string; type: string; proxies: string[] }>>([])
-  const [showAllNodes, setShowAllNodes] = useState(false)
+  const [showAllNodes, setShowAllNodes] = useState(true)
   const [draggedNode, setDraggedNode] = useState<{ name: string; fromGroup: string | null; fromIndex: number } | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
 
@@ -571,8 +571,8 @@ function SubscribeFilesPage() {
 
     const updatedGroups = [...proxyGroups]
 
-    // 从原来的位置移除
-    if (draggedNode.fromGroup && draggedNode.fromGroup !== 'available') {
+    // 从原来的位置移除（只有从代理组拖动时才移除，从可用节点拖动时不移除）
+    if (draggedNode.fromGroup && draggedNode.fromGroup !== 'available' && draggedNode.name !== '__AVAILABLE_NODES__') {
       const fromGroupIndex = updatedGroups.findIndex(g => g.name === draggedNode.fromGroup)
       if (fromGroupIndex !== -1) {
         updatedGroups[fromGroupIndex].proxies = updatedGroups[fromGroupIndex].proxies.filter(
@@ -585,9 +585,18 @@ function SubscribeFilesPage() {
     if (toGroup !== 'available') {
       const toGroupIndex = updatedGroups.findIndex(g => g.name === toGroup)
       if (toGroupIndex !== -1) {
-        // 检查节点是否已存在于目标组中
-        if (!updatedGroups[toGroupIndex].proxies.includes(draggedNode.name)) {
-          updatedGroups[toGroupIndex].proxies.push(draggedNode.name)
+        // 特殊处理：如果拖动的是"可用节点"标题，添加所有可用节点
+        if (draggedNode.name === '__AVAILABLE_NODES__') {
+          availableNodes.forEach(nodeName => {
+            if (!updatedGroups[toGroupIndex].proxies.includes(nodeName)) {
+              updatedGroups[toGroupIndex].proxies.push(nodeName)
+            }
+          })
+        } else {
+          // 检查节点是否已存在于目标组中
+          if (!updatedGroups[toGroupIndex].proxies.includes(draggedNode.name)) {
+            updatedGroups[toGroupIndex].proxies.push(draggedNode.name)
+          }
         }
       }
     }
@@ -1253,10 +1262,20 @@ function SubscribeFilesPage() {
                     onDrop={handleDropToAvailable}
                   >
                     <CardHeader className='pb-3'>
-                      <CardTitle className='text-base'>可用节点</CardTitle>
-                      <CardDescription className='text-xs'>
-                        {availableNodes.length} 个节点
-                      </CardDescription>
+                      <div
+                        draggable
+                        onDragStart={() => handleDragStart('__AVAILABLE_NODES__', 'available', -1)}
+                        onDragEnd={handleDragEnd}
+                        className='flex items-center gap-2 cursor-move'
+                      >
+                        <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                        <div>
+                          <CardTitle className='text-base'>可用节点</CardTitle>
+                          <CardDescription className='text-xs'>
+                            {availableNodes.length} 个节点
+                          </CardDescription>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent className='space-y-1'>
                       {availableNodes.map((proxy, idx) => (
