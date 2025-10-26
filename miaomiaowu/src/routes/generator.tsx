@@ -1,10 +1,13 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, Download, Loader2, Save, Layers, GripVertical, X, Activity } from 'lucide-react'
+import { Copy, Download, Loader2, Save, Layers, Activity } from 'lucide-react'
+import { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import { arrayMove } from '@dnd-kit/sortable'
 import { Topbar } from '@/components/layout/topbar'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
+import { EditNodesDialog } from '@/components/edit-nodes-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -120,9 +123,11 @@ function SubscriptionGeneratorPage() {
   // 手动分组对话框状态
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
-  const [availableProxies, setAvailableProxies] = useState<string[]>([])
+  const [allProxies, setAllProxies] = useState<string[]>([])
   const [draggedItem, setDraggedItem] = useState<{ proxy: string; sourceGroup: string | null; sourceIndex: number } | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
+  const [activeGroupTitle, setActiveGroupTitle] = useState<string | null>(null)
+  const [showAllNodes, setShowAllNodes] = useState(true)
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // 缺失节点替换对话框状态
@@ -190,7 +195,23 @@ function SubscriptionGeneratorPage() {
     lazy?: boolean
   }
 
+  // 计算可用节点（根据 showAllNodes 状态过滤）
+  const availableProxies = useMemo(() => {
+    if (showAllNodes) {
+      return allProxies
+    }
 
+    // 收集所有已使用的节点
+    const usedNodes = new Set<string>()
+    proxyGroups.forEach(group => {
+      group.proxies.forEach(proxy => {
+        usedNodes.add(proxy)
+      })
+    })
+
+    // 只返回未使用的节点
+    return allProxies.filter(name => !usedNodes.has(name))
+  }, [allProxies, proxyGroups, showAllNodes])
 
   // 加载模板并插入节点
   const handleLoadTemplate = async () => {
@@ -426,12 +447,12 @@ function SubscriptionGeneratorPage() {
       })) as ProxyGroup[]
 
       // 获取所有可用的代理节点，添加默认的特殊节点
-      const allProxies = parsedConfig.proxies?.map((p: any) => p.name) || []
+      const proxies = parsedConfig.proxies?.map((p: any) => p.name) || []
       const specialNodes = ['♻️ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
-      const availableNodes = [...specialNodes, ...allProxies]
+      const availableNodes = [...specialNodes, ...proxies]
 
       setProxyGroups(groups)
-      setAvailableProxies(availableNodes)
+      setAllProxies(availableNodes)
       setGroupDialogOpen(true)
     } catch (error) {
       console.error('解析配置失败:', error)
@@ -511,7 +532,8 @@ function SubscriptionGeneratorPage() {
     proxyGroupNames.add('DIRECT')
     proxyGroupNames.add('REJECT')
     proxyGroupNames.add('PROXY')
-
+    proxyGroupNames.add('no-resolve')
+    
     const missingNodes = new Set<string>()
 
     // 检查每条规则
@@ -652,6 +674,114 @@ function SubscriptionGeneratorPage() {
     setDragOverGroup(null)
   }
 
+  // DND Kit 卡片排序处理函数
+  // DND Kit 辅助函数 - 解析放置目标
+  const resolveTargetGroup = (overItem: any) => {
+    if (!overItem) {
+      return null
+    }
+    const overId = String(overItem.id)
+    const ensureValidGroup = (groupName: string | null) =>
+      groupName && proxyGroups.some(group => group.name === groupName) ? groupName : null
+    if (overId.startsWith('drop-')) {
+      return ensureValidGroup(overId.replace('drop-', ''))
+    }
+    const overData = overItem.data?.current as { groupName?: string } | undefined
+    if (overData?.groupName) {
+      return ensureValidGroup(overData.groupName)
+    }
+    return ensureValidGroup(overId || null)
+  }
+
+  const handleCardDragStart = (event: DragStartEvent) => {
+    const activeId = String(event.active.id)
+
+    if (activeId.startsWith('group-title-')) {
+      const groupName = activeId.replace('group-title-', '')
+      setDraggedItem({ proxy: groupName, sourceGroup: null, sourceIndex: -1 })
+      setActiveGroupTitle(groupName)
+    }
+  }
+
+  const handleCardDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over) {
+      if (String(active.id).startsWith('group-title-')) {
+        handleDragEnd()
+      }
+      setDragOverGroup(null)
+      return
+    }
+
+    const activeId = String(active.id)
+
+    // 处理卡片排序（拖动卡片顶部按钮）
+    if (!activeId.startsWith('group-title-') && !activeId.startsWith('drop-')) {
+      if (active.id === over.id) {
+        return
+      }
+      setProxyGroups((groups) => {
+        const oldIndex = groups.findIndex((g) => g.name === active.id)
+        const newIndex = groups.findIndex((g) => g.name === over.id)
+        return arrayMove(groups, oldIndex, newIndex)
+      })
+      return
+    }
+
+    // 处理拖动代理组标题作为节点
+    if (activeId.startsWith('group-title-')) {
+      const groupName = activeId.replace('group-title-', '')
+      const targetGroupName = resolveTargetGroup(over)
+
+      if (targetGroupName && targetGroupName !== groupName) {
+        setProxyGroups((groups) => {
+          return groups.map((group) => {
+            if (group.name === targetGroupName) {
+              if (!group.proxies.includes(groupName)) {
+                return {
+                  ...group,
+                  proxies: [...group.proxies, groupName],
+                }
+              }
+            }
+            return group
+          })
+        })
+      }
+
+      handleDragEnd()
+    }
+
+    setDragOverGroup(null)
+  }
+
+  // DND Kit 节点排序处理函数（在同一个组内）
+  const handleNodeDragEnd = (groupName: string) => (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    setProxyGroups((groups) => {
+      return groups.map((group) => {
+        if (group.name !== groupName) {
+          return group
+        }
+
+        const proxies = group.proxies || []
+        const oldIndex = proxies.findIndex((p) => `${groupName}-${p}` === active.id)
+        const newIndex = proxies.findIndex((p) => `${groupName}-${p}` === over.id)
+
+        return {
+          ...group,
+          proxies: arrayMove(proxies, oldIndex, newIndex),
+        }
+      })
+    })
+  }
+
   const handleDragEnterGroup = (groupName: string) => {
     // 清除之前的定时器
     if (dragTimeoutRef.current) {
@@ -674,63 +804,54 @@ function SubscriptionGeneratorPage() {
   const handleDrop = (targetGroupName: string, targetIndex?: number) => {
     if (!draggedItem) return
 
-    setProxyGroups(groups => {
-      const newGroups = groups.map(group => {
-        // 从源组中移除（只有从代理组拖动时才移除，从可用节点拖动时不移除）
-        if (group.name === draggedItem.sourceGroup && draggedItem.sourceGroup !== null && draggedItem.proxy !== '__AVAILABLE_PROXIES__') {
-          return {
-            ...group,
-            proxies: group.proxies.filter((_, idx) => idx !== draggedItem.sourceIndex)
-          }
-        }
-        return group
-      })
+    const updatedGroups = [...proxyGroups]
+    const toGroupIndex = updatedGroups.findIndex(g => g.name === targetGroupName)
 
-      // 添加到目标组
-      return newGroups.map(group => {
-        if (group.name === targetGroupName) {
-          // 特殊处理：如果拖动的是"可用节点"标题，添加所有可用节点
-          if (draggedItem.proxy === '__AVAILABLE_PROXIES__') {
-            const specialNodes = ['♻️ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
-            const newProxies = [...group.proxies]
-            availableProxies.forEach(proxyName => {
-              // 过滤掉特殊节点
-              if (!newProxies.includes(proxyName) && !specialNodes.includes(proxyName)) {
-                newProxies.push(proxyName)
-              }
-            })
-            return {
-              ...group,
-              proxies: newProxies
-            }
-          } else {
-            // 防止代理组添加到自己内部
-            if (draggedItem.proxy === targetGroupName) {
-              return group
-            }
-            // 检查是否已存在
-            if (!group.proxies.includes(draggedItem.proxy)) {
-              const newProxies = [...group.proxies]
-              if (targetIndex !== undefined) {
-                // 插入到指定位置
-                newProxies.splice(targetIndex, 0, draggedItem.proxy)
-              } else {
-                // 添加到末尾
-                newProxies.push(draggedItem.proxy)
-              }
-              return {
-                ...group,
-                proxies: newProxies
-              }
-            }
-          }
-        }
-        return group
-      })
-    })
+    if (toGroupIndex === -1) {
+      handleDragEnd()
+      return
+    }
 
-    setDraggedItem(null)
-    setDragOverGroup(null)
+    // 如果从代理组拖动，从源组中移除
+    if (draggedItem.sourceGroup && draggedItem.sourceGroup !== null && draggedItem.proxy !== '__AVAILABLE_NODES__') {
+      const fromGroupIndex = updatedGroups.findIndex(g => g.name === draggedItem.sourceGroup)
+      if (fromGroupIndex !== -1) {
+        updatedGroups[fromGroupIndex].proxies = updatedGroups[fromGroupIndex].proxies.filter(
+          (_, idx) => idx !== draggedItem.sourceIndex
+        )
+      }
+    }
+
+    // 添加到目标组
+    // 特殊处理：如果拖动的是"可用节点"标题，添加当前显示的所有可用节点
+    if (draggedItem.proxy === '__AVAILABLE_NODES__') {
+      const specialNodes = ['♻️ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
+      availableProxies.forEach(proxyName => {
+        // 过滤掉特殊节点
+        if (!updatedGroups[toGroupIndex].proxies.includes(proxyName) && !specialNodes.includes(proxyName)) {
+          updatedGroups[toGroupIndex].proxies.push(proxyName)
+        }
+      })
+    } else {
+      // 防止代理组添加到自己内部
+      if (draggedItem.proxy === targetGroupName) {
+        handleDragEnd()
+        return
+      }
+      // 检查节点是否已存在于目标组中
+      if (!updatedGroups[toGroupIndex].proxies.includes(draggedItem.proxy)) {
+        if (targetIndex !== undefined) {
+          // 插入到指定位置
+          updatedGroups[toGroupIndex].proxies.splice(targetIndex, 0, draggedItem.proxy)
+        } else {
+          // 添加到末尾
+          updatedGroups[toGroupIndex].proxies.push(draggedItem.proxy)
+        }
+      }
+    }
+
+    setProxyGroups(updatedGroups)
+    handleDragEnd()
   }
 
   const handleDropToAvailable = () => {
@@ -780,6 +901,23 @@ function SubscriptionGeneratorPage() {
         proxies: group.proxies.filter(proxy => proxy !== groupName)
       }))
     })
+  }
+
+  // 处理手动分组对话框关闭
+  const handleGroupDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      // 先关闭对话框
+      setGroupDialogOpen(false)
+
+      // 延迟重置数据，避免用户看到复位动画
+      setTimeout(() => {
+        setProxyGroups([])
+        setAllProxies([])
+        setActiveGroupTitle(null)
+      }, 200)
+    } else {
+      setGroupDialogOpen(open)
+    }
   }
 
   return (
@@ -1125,190 +1263,34 @@ function SubscriptionGeneratorPage() {
       </Dialog>
 
       {/* 手动分组对话框 */}
-      <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
-        <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '95vw', width: '95vw' }}>
-          <DialogHeader>
-            <DialogTitle>手动分组节点</DialogTitle>
-            <DialogDescription>
-              拖拽节点到不同的代理组，自定义每个组的节点列表
-            </DialogDescription>
-          </DialogHeader>
-          <div className='flex-1 overflow-y-auto py-4'>
-            <div className='flex gap-4 h-full'>
-              {/* 左侧：代理组（自适应宽度） */}
-              <div className='flex-1 grid gap-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-                {proxyGroups.map((group) => (
-                  <Card
-                    key={group.name}
-                    className={`flex flex-col transition-all duration-75 ${
-                      dragOverGroup === group.name
-                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
-                        : ''
-                    }`}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      handleDragEnterGroup(group.name)
-                    }}
-                    onDragLeave={handleDragLeaveGroup}
-                    onDrop={() => handleDrop(group.name)}
-                  >
-                    <CardHeader className='pb-3'>
-                      <div className='flex items-start justify-between gap-2'>
-                        <div className='flex-1 min-w-0'>
-                          <div
-                            draggable
-                            onDragStart={() => handleDragStart(group.name, null, -1)}
-                            onDragEnd={handleDragEnd}
-                            className='flex items-center gap-2 cursor-move group/title'
-                          >
-                            <GripVertical className='h-3 w-3 text-muted-foreground opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0' />
-                            <CardTitle className='text-base truncate'>{group.name}</CardTitle>
-                          </div>
-                          <CardDescription className='text-xs'>
-                            {group.type} ({(group.proxies || []).length} 个节点)
-                          </CardDescription>
-                        </div>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='h-6 w-6 p-0 flex-shrink-0'
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRemoveGroup(group.name)
-                          }}
-                        >
-                          <X className='h-4 w-4 text-muted-foreground hover:text-destructive' />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className='flex-1 space-y-1 min-h-[200px]'>
-                      {(group.proxies || []).map((proxy, idx) => (
-                        proxy && (
-                          <div
-                            key={`${group.name}-${proxy}-${idx}`}
-                            draggable
-                            onDragStart={() => handleDragStart(proxy, group.name, idx)}
-                            onDragEnd={handleDragEnd}
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              handleDragEnterGroup(group.name)
-                            }}
-                            onDrop={(e) => {
-                              e.stopPropagation()
-                              handleDrop(group.name, idx)
-                            }}
-                            className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75 group/item'
-                          >
-                            <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                            <span className='text-sm truncate flex-1'>{proxy}</span>
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              className='h-6 w-6 p-0'
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleRemoveProxy(group.name, idx)
-                              }}
-                            >
-                              <X className='h-4 w-4 text-muted-foreground hover:text-destructive' />
-                            </Button>
-                          </div>
-                        )
-                      ))}
-                      {(group.proxies || []).filter(p => p).length === 0 && (
-                        <div className={`text-sm text-center py-8 transition-colors ${
-                          dragOverGroup === group.name
-                            ? 'text-primary font-medium'
-                            : 'text-muted-foreground'
-                        }`}>
-                          将节点拖拽到这里
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* 分割线 */}
-              <div className='w-1 bg-border flex-shrink-0'></div>
-
-              {/* 右侧：可用节点 */}
-              <div className='w-64 flex-shrink-0 flex flex-col h-full'>
-                <div className='flex-1 overflow-y-auto min-h-0'>
-                  <Card
-                    className={`transition-all duration-75 ${
-                      dragOverGroup === 'available'
-                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
-                        : ''
-                    }`}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      handleDragEnterGroup('available')
-                    }}
-                    onDragLeave={handleDragLeaveGroup}
-                    onDrop={handleDropToAvailable}
-                  >
-                    <CardHeader className='pb-3'>
-                      <div
-                        draggable
-                        onDragStart={() => handleDragStart('__AVAILABLE_PROXIES__', null, -1)}
-                        onDragEnd={handleDragEnd}
-                        className='flex items-center gap-2 cursor-move'
-                      >
-                        <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                        <div>
-                          <CardTitle className='text-base'>可用节点</CardTitle>
-                          <CardDescription className='text-xs'>
-                            {availableProxies.length} 个节点
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className='space-y-1'>
-                      {availableProxies.map((proxy, idx) => (
-                        <div
-                          key={`available-${proxy}-${idx}`}
-                          draggable
-                          onDragStart={() => handleDragStart(proxy, null, idx)}
-                          onDragEnd={handleDragEnd}
-                          className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75'
-                        >
-                          <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                          <span className='text-sm truncate flex-1'>{proxy}</span>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* 按钮区域 - 固定在底部 */}
-                <div className='flex-shrink-0 pt-4 bg-background'>
-                  {/* 配置链式代理按钮 */}
-                  <Button
-                    variant='outline'
-                    className='w-full'
-                    onClick={handleConfigureChainProxy}
-                  >
-                    <Layers className='mr-2 h-4 w-4' />
-                    配置链式代理
-                  </Button>
-
-                  {/* 操作按钮 */}
-                  <div className='flex gap-2 mt-4'>
-                    <Button variant='outline' onClick={() => setGroupDialogOpen(false)} className='flex-1'>
-                      取消
-                    </Button>
-                    <Button onClick={handleApplyGrouping} className='flex-1'>
-                      应用分组
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EditNodesDialog
+        open={groupDialogOpen}
+        onOpenChange={handleGroupDialogOpenChange}
+        title="手动分组节点"
+        proxyGroups={proxyGroups}
+        availableNodes={availableProxies}
+        onProxyGroupsChange={setProxyGroups}
+        onSave={handleApplyGrouping}
+        onConfigureChainProxy={handleConfigureChainProxy}
+        showAllNodes={showAllNodes}
+        onShowAllNodesChange={setShowAllNodes}
+        draggedNode={draggedItem ? { name: draggedItem.proxy, fromGroup: draggedItem.sourceGroup, fromIndex: draggedItem.sourceIndex } : null}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        dragOverGroup={dragOverGroup}
+        onDragEnterGroup={handleDragEnterGroup}
+        onDragLeaveGroup={handleDragLeaveGroup}
+        onDrop={handleDrop}
+        onDropToAvailable={handleDropToAvailable}
+        onRemoveNodeFromGroup={handleRemoveProxy}
+        onRemoveGroup={handleRemoveGroup}
+        handleCardDragStart={handleCardDragStart}
+        handleCardDragEnd={handleCardDragEnd}
+        handleNodeDragEnd={handleNodeDragEnd}
+        activeGroupTitle={activeGroupTitle}
+        saveButtonText="应用分组"
+        groupTitleTrasnform='translate(-50%, -475%)'
+      />
 
       {/* 缺失节点替换对话框 */}
       <Dialog open={missingNodesDialogOpen} onOpenChange={setMissingNodesDialogOpen}>

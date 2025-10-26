@@ -17,6 +17,22 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Upload, Download, Plus, Edit, Settings, FileText, Save, GripVertical, X, Layers, Wand2 } from 'lucide-react'
+import { EditNodesDialog } from '@/components/edit-nodes-dialog'
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  DragStartEvent,
+  useDraggable,
+  useDroppable,
+  DragOverEvent,
+  DragOverlay,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 export const Route = createFileRoute('/subscribe-files/')({
   beforeLoad: () => {
@@ -84,6 +100,16 @@ function SubscribeFilesPage() {
   const [showAllNodes, setShowAllNodes] = useState(true)
   const [draggedNode, setDraggedNode] = useState<{ name: string; fromGroup: string | null; fromIndex: number } | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
+  const [activeGroupTitle, setActiveGroupTitle] = useState<string | null>(null)
+
+  // DND Kit 状态 - 用于卡片排序
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 移动8px后才开始拖动，避免点击误触发
+      },
+    })
+  )
 
   // 编辑器状态
   const [editorValue, setEditorValue] = useState('')
@@ -580,7 +606,137 @@ function SubscribeFilesPage() {
     }
   }
 
-  // 拖拽相关函数
+  // DND Kit 卡片排序处理函数
+  const resolveTargetGroup = (overItem: DragOverEvent['over'] | DragEndEvent['over']) => {
+    if (!overItem) {
+      return null
+    }
+    const overId = String(overItem.id)
+    const ensureValidGroup = (groupName: string | null) =>
+      groupName && proxyGroups.some(group => group.name === groupName) ? groupName : null
+    if (overId.startsWith('drop-')) {
+      return ensureValidGroup(overId.replace('drop-', ''))
+    }
+    const overData = overItem.data?.current as { groupName?: string } | undefined
+    if (overData?.groupName) {
+      return ensureValidGroup(overData.groupName)
+    }
+    return ensureValidGroup(overId || null)
+  }
+
+  const handleCardDragStart = (event: DragStartEvent) => {
+    const activeId = String(event.active.id)
+
+    if (activeId.startsWith('group-title-')) {
+      const groupName = activeId.replace('group-title-', '')
+      setDraggedNode({ name: groupName, fromGroup: null, fromIndex: -1 })
+      setActiveGroupTitle(groupName)
+    }
+  }
+
+  const handleCardDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over) {
+      if (String(active.id).startsWith('group-title-')) {
+        handleDragEnd()
+      }
+      setDragOverGroup(null)
+      return
+    }
+
+    const activeId = String(active.id)
+
+    // 处理卡片排序（拖动卡片顶部按钮）
+    if (!activeId.startsWith('group-title-') && !activeId.startsWith('drop-')) {
+      if (active.id === over.id) {
+        return
+      }
+      setProxyGroups((groups) => {
+        const oldIndex = groups.findIndex((g) => g.name === active.id)
+        const newIndex = groups.findIndex((g) => g.name === over.id)
+        return arrayMove(groups, oldIndex, newIndex)
+      })
+      return
+    }
+
+    if (activeId.startsWith('group-title-')) {
+      const groupName = activeId.replace('group-title-', '')
+      const targetGroupName = resolveTargetGroup(over)
+
+      if (targetGroupName && targetGroupName !== groupName) {
+        setProxyGroups((groups) => {
+          return groups.map((group) => {
+            if (group.name === targetGroupName) {
+              if (!group.proxies.includes(groupName)) {
+                return {
+                  ...group,
+                  proxies: [...group.proxies, groupName],
+                }
+              }
+            }
+            return group
+          })
+        })
+      }
+
+      handleDragEnd()
+    }
+
+    setDragOverGroup(null)
+  }
+
+  const handleCardDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+
+    if (!over) {
+      if (dragOverGroup) {
+        setDragOverGroup(null)
+      }
+      return
+    }
+
+    const activeId = String(active.id)
+    if (activeId.startsWith('group-title-')) {
+      const targetGroupName = resolveTargetGroup(over)
+      if (targetGroupName !== dragOverGroup) {
+        setDragOverGroup(targetGroupName)
+      }
+      return
+    }
+
+    if (dragOverGroup) {
+      setDragOverGroup(null)
+    }
+  }
+
+  // DND Kit 节点排序处理函数（在同一个组内）
+  const handleNodeDragEnd = (groupName: string) => (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    setProxyGroups((groups) => {
+      return groups.map((group) => {
+        if (group.name !== groupName) {
+          return group
+        }
+
+        const proxies = group.proxies || []
+        const oldIndex = proxies.findIndex((p) => `${groupName}-${p}` === active.id)
+        const newIndex = proxies.findIndex((p) => `${groupName}-${p}` === over.id)
+
+        return {
+          ...group,
+          proxies: arrayMove(proxies, oldIndex, newIndex),
+        }
+      })
+    })
+  }
+
+  // 拖拽相关函数（用于节点拖动）
   const handleDragStart = (nodeName: string, fromGroup: string | null, fromIndex: number) => {
     setDraggedNode({ name: nodeName, fromGroup, fromIndex })
   }
@@ -588,6 +744,7 @@ function SubscribeFilesPage() {
   const handleDragEnd = () => {
     setDraggedNode(null)
     setDragOverGroup(null)
+    setActiveGroupTitle(null)
   }
 
   const handleDragEnterGroup = (groupName: string) => {
@@ -674,6 +831,20 @@ function SubscribeFilesPage() {
     setProxyGroups(updatedGroups)
   }
 
+  // 删除整个代理组
+  const handleRemoveGroup = (groupName: string) => {
+    setProxyGroups(groups => {
+      // 先过滤掉要删除的组
+      const filteredGroups = groups.filter(group => group.name !== groupName)
+
+      // 从所有剩余组的 proxies 列表中移除对被删除组的引用
+      return filteredGroups.map(group => ({
+        ...group,
+        proxies: group.proxies.filter(proxy => proxy !== groupName)
+      }))
+    })
+  }
+
   // 计算可用节点
   const availableNodes = useMemo(() => {
     if (!nodesQuery.data?.nodes) return []
@@ -693,6 +864,38 @@ function SubscribeFilesPage() {
     // 只返回未使用的节点
     return allNodeNames.filter(name => !usedNodes.has(name))
   }, [nodesQuery.data, proxyGroups, showAllNodes])
+
+  // 处理编辑节点对话框关闭
+  const handleEditNodesDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      // 先关闭对话框
+      setEditNodesDialogOpen(false)
+
+      // 延迟重置数据，避免用户看到复位动画
+      setTimeout(() => {
+        // 关闭时重新加载原始数据
+        if (nodesConfigQuery.data?.content) {
+          try {
+            const parsed = parseYAML(nodesConfigQuery.data.content) as any
+            if (parsed && parsed['proxy-groups']) {
+              const groups = parsed['proxy-groups'].map((group: any) => ({
+                name: group.name || '',
+                type: group.type || '',
+                proxies: Array.isArray(group.proxies) ? group.proxies : [],
+              }))
+              setProxyGroups(groups)
+            }
+          } catch (error) {
+            console.error('重新加载配置失败:', error)
+          }
+        }
+        setEditingNodesFile(null)
+        setShowAllNodes(false)
+      }, 200)
+    } else {
+      setEditNodesDialogOpen(open)
+    }
+  }
 
   return (
     <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
@@ -1174,177 +1377,34 @@ function SubscribeFilesPage() {
       </Dialog>
 
       {/* 编辑节点对话框 */}
-      <Dialog open={editNodesDialogOpen} onOpenChange={(open) => {
-        setEditNodesDialogOpen(open)
-        if (!open) {
-          setEditingNodesFile(null)
-          setProxyGroups([])
-          setShowAllNodes(false)
-        }
-      }}>
-        <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '95vw', width: '95vw' }}>
-          <DialogHeader>
-            <DialogTitle>编辑节点 - {editingNodesFile?.name}</DialogTitle>
-            <DialogDescription>
-              拖拽节点到不同的代理组，自定义每个组的节点列表
-            </DialogDescription>
-          </DialogHeader>
-          <div className='flex-1 overflow-y-auto py-4'>
-            <div className='flex gap-4 h-full'>
-              {/* 左侧：代理组 */}
-              <div className='flex-1 grid gap-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-                {proxyGroups.map((group) => (
-                  <Card
-                    key={group.name}
-                    className={`flex flex-col transition-all duration-75 ${
-                      dragOverGroup === group.name
-                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
-                        : ''
-                    }`}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      handleDragEnterGroup(group.name)
-                    }}
-                    onDragLeave={handleDragLeaveGroup}
-                    onDrop={() => handleDrop(group.name)}
-                  >
-                    <CardHeader className='pb-3'>
-                      <div className='flex items-start justify-between gap-2'>
-                        <div className='flex-1 min-w-0'>
-                          <div
-                            draggable
-                            onDragStart={() => handleDragStart(group.name, null, -1)}
-                            onDragEnd={handleDragEnd}
-                            className='flex items-center gap-2 cursor-move group/title'
-                          >
-                            <GripVertical className='h-3 w-3 text-muted-foreground opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0' />
-                            <CardTitle className='text-base truncate'>{group.name}</CardTitle>
-                          </div>
-                          <CardDescription className='text-xs'>
-                            {group.type} ({(group.proxies || []).length} 个节点)
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className='flex-1 space-y-1 min-h-[200px]'>
-                      {(group.proxies || []).map((proxy, idx) => (
-                        proxy && (
-                          <div
-                            key={`${group.name}-${proxy}-${idx}`}
-                            draggable
-                            onDragStart={() => handleDragStart(proxy, group.name, idx)}
-                            onDragEnd={handleDragEnd}
-                            className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75'
-                          >
-                            <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                            <span className='text-sm truncate flex-1'>{proxy}</span>
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              className='h-6 w-6 p-0 flex-shrink-0'
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleRemoveNodeFromGroup(group.name, idx)
-                              }}
-                            >
-                              <X className='h-4 w-4 text-muted-foreground hover:text-destructive' />
-                            </Button>
-                          </div>
-                        )
-                      ))}
-                      {(group.proxies || []).filter(p => p).length === 0 && (
-                        <div className={`text-sm text-center py-8 transition-colors ${
-                          dragOverGroup === group.name
-                            ? 'text-primary font-medium'
-                            : 'text-muted-foreground'
-                        }`}>
-                          将节点拖拽到这里
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* 分割线 */}
-              <div className='w-1 bg-border flex-shrink-0'></div>
-
-              {/* 右侧：可用节点 */}
-              <div className='w-64 flex-shrink-0 flex flex-col h-full'>
-                {/* 操作按钮 */}
-                <div className='flex-shrink-0 mb-4'>
-                  <div className='flex gap-2'>
-                    <Button variant='outline' onClick={() => setEditNodesDialogOpen(false)} className='flex-1'>
-                      取消
-                    </Button>
-                    <Button onClick={handleSaveNodes} className='flex-1' disabled={saveConfigMutation.isPending}>
-                      {saveConfigMutation.isPending ? '保存中...' : '应用并保存'}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* 显示/隐藏已添加节点按钮 */}
-                <div className='flex-shrink-0 mb-4'>
-                  <Button
-                    variant='outline'
-                    className='w-full'
-                    onClick={() => setShowAllNodes(!showAllNodes)}
-                  >
-                    {showAllNodes ? '隐藏已添加节点' : '显示已添加节点'}
-                  </Button>
-                </div>
-
-                <div className='flex-1 overflow-y-auto min-h-0'>
-                  <Card
-                    className={`transition-all duration-75 ${
-                      dragOverGroup === 'available'
-                        ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
-                        : ''
-                    }`}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      handleDragEnterGroup('available')
-                    }}
-                    onDragLeave={handleDragLeaveGroup}
-                    onDrop={handleDropToAvailable}
-                  >
-                    <CardHeader className='pb-3'>
-                      <div
-                        draggable
-                        onDragStart={() => handleDragStart('__AVAILABLE_NODES__', 'available', -1)}
-                        onDragEnd={handleDragEnd}
-                        className='flex items-center gap-2 cursor-move'
-                      >
-                        <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                        <div>
-                          <CardTitle className='text-base'>可用节点</CardTitle>
-                          <CardDescription className='text-xs'>
-                            {availableNodes.length} 个节点
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className='space-y-1'>
-                      {availableNodes.map((proxy, idx) => (
-                        <div
-                          key={`available-${proxy}-${idx}`}
-                          draggable
-                          onDragStart={() => handleDragStart(proxy, 'available', idx)}
-                          onDragEnd={handleDragEnd}
-                          className='flex items-center gap-2 p-2 rounded border hover:border-border hover:bg-accent cursor-move transition-colors duration-75'
-                        >
-                          <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                          <span className='text-sm truncate flex-1'>{proxy}</span>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EditNodesDialog
+        open={editNodesDialogOpen}
+        onOpenChange={handleEditNodesDialogOpenChange}
+        title={`编辑节点 - ${editingNodesFile?.name}`}
+        proxyGroups={proxyGroups}
+        availableNodes={availableNodes}
+        onProxyGroupsChange={setProxyGroups}
+        onSave={handleSaveNodes}
+        isSaving={saveConfigMutation.isPending}
+        showAllNodes={showAllNodes}
+        onShowAllNodesChange={setShowAllNodes}
+        draggedNode={draggedNode}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        dragOverGroup={dragOverGroup}
+        onDragEnterGroup={handleDragEnterGroup}
+        onDragLeaveGroup={handleDragLeaveGroup}
+        onDrop={handleDrop}
+        onDropToAvailable={handleDropToAvailable}
+        onRemoveNodeFromGroup={handleRemoveNodeFromGroup}
+        onRemoveGroup={handleRemoveGroup}
+        handleCardDragStart={handleCardDragStart}
+        handleCardDragEnd={handleCardDragEnd}
+        handleNodeDragEnd={handleNodeDragEnd}
+        activeGroupTitle={activeGroupTitle}
+        saveButtonText='应用并保存'
+        groupTitleTrasnform='translate(-50%, -225%)'
+      />
     </main>
   )
 }
