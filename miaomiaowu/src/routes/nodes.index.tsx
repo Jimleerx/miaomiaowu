@@ -672,7 +672,7 @@ function NodesPage() {
   return (
     <div className='min-h-svh bg-background'>
       <Topbar />
-      <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
+      <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 pt-24'>
         <section className='space-y-4'>
           <div>
             <h1 className='text-3xl font-semibold tracking-tight'>节点管理</h1>

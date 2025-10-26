@@ -224,7 +224,7 @@ function CustomRulesPage() {
 	}
 
 	return (
-		<main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
+		<main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 pt-24'>
 			<div className='space-y-6'>
 				<div className='flex items-center justify-between'>
 					<div>

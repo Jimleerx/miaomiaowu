@@ -419,7 +419,7 @@ function ProbeManagePage() {
     return (
       <div className='min-h-svh bg-background'>
         <Topbar />
-        <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
+        <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 pt-24'>
           <Card className='border-dashed shadow-none'>
             <CardHeader>
               <CardTitle>加载中…</CardTitle>
@@ -442,7 +442,7 @@ function ProbeManagePage() {
     return (
       <div className='min-h-svh bg-background'>
         <Topbar />
-        <main className='mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-20 text-center sm:px-6'>
+        <main className='mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-20 text-center sm:px-6 pt-24'>
           <Card className='w-full border-dashed shadow-none'>
             <CardHeader>
               <CardTitle>权限不足</CardTitle>
@@ -457,7 +457,7 @@ function ProbeManagePage() {
   return (
     <div className='min-h-svh bg-background'>
       <Topbar />
-      <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
+      <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 pt-24'>
         <form className='space-y-8' onSubmit={handleSubmit}>
           <section className='space-y-2'>
             <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>

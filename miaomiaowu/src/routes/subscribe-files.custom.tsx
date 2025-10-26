@@ -14,7 +14,7 @@ export const Route = createFileRoute('/subscribe-files/custom')({
 
 function CustomProxyGroupPage() {
   return (
-    <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
+    <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 pt-24'>
       <section className='space-y-4'>
         <div>
           <h1 className='text-3xl font-semibold tracking-tight'>自定义代理组</h1>

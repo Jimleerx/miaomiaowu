@@ -176,7 +176,7 @@ function SubscriptionPage() {
   return (
     <div className='min-h-svh bg-background'>
       <Topbar />
-      <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
+      <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 pt-24'>
         <section className='space-y-4 text-center sm:text-left'>
           <h1 className='text-3xl font-semibold tracking-tight'>订阅链接</h1>
           <p className='mt-2 text-sm font-semibold text-destructive'>转换客户端代理是从substore抄过来的, 没有完全测试，有BUG请联系开发者</p>

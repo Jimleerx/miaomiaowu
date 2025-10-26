@@ -105,7 +105,7 @@ function DashboardPage() {
   return (
     <div className='min-h-svh bg-background'>
       <Topbar />
-      <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
+      <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 pt-24'>
 
         <section className=' grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
           {isLoading

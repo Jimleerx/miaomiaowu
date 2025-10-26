@@ -924,7 +924,7 @@ function SubscriptionGeneratorPage() {
     <div className='flex min-h-screen flex-col bg-background'>
       <Topbar />
 
-      <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6'>
+      <main className='mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 pt-24'>
         <div className='mx-auto max-w-5xl space-y-6'>
           <div className='space-y-2'>
             <h1 className='text-3xl font-bold tracking-tight'>订阅链接生成器</h1>

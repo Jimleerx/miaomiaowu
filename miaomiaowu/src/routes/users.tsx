@@ -263,7 +263,7 @@ function UsersPage() {
     return (
       <div className='min-h-svh bg-background'>
         <Topbar />
-        <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6'>
+        <main className='mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 pt-24'>
           <Card className='shadow-none border-dashed'>
             <CardHeader>
               <CardTitle>加载中…</CardTitle>
@@ -286,7 +286,7 @@ function UsersPage() {
     return (
       <div className='min-h-svh bg-background'>
         <Topbar />
-        <main className='mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-20 text-center sm:px-6'>
+        <main className='mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-20 text-center sm:px-6 pt-24'>
           <Card className='w-full shadow-none border-dashed'>
             <CardHeader>
               <CardTitle>权限不足</CardTitle>
@@ -301,7 +301,7 @@ function UsersPage() {
   return (
     <div className='min-h-svh bg-background'>
       <Topbar />
-      <main className='mx-auto w-full max-w-6xl px-4 py-8 sm:px-6'>
+      <main className='mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 pt-24'>
         <section className='space-y-3'>
           <h1 className='text-3xl font-semibold tracking-tight'>用户管理</h1>
           <p className='text-muted-foreground'>查看系统用户，调整启用状态并重置密码。</p>
