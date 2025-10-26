@@ -254,7 +254,7 @@ export default function ClashMeta_Producer(): Producer {
             | undefined
           if (networkPath) {
             const reg = /^(.*?)(?:\?ed=(\d+))?$/
-            // eslint-disable-next-line no-unused-vars
+             
             const [_, path = '', ed = ''] = reg.exec(networkPath) ?? []
             ;(proxy[`${proxy.network}-opts`] as Record<string, unknown>).path = path
             if (ed !== '') {

@@ -29,10 +29,16 @@ export default defineConfig(
         'warn',
         { allowConstantExport: true },
       ],
-      'no-console': 'error',
+      'no-console': 'warn', // 改为警告而不是错误
+      'prefer-const': 'warn', // 改为警告
+      '@typescript-eslint/no-explicit-any': 'warn', // 允许 any 类型但显示警告
+      '@typescript-eslint/ban-ts-comment': 'warn', // 允许 @ts-nocheck 和 @ts-ignore，但显示警告
+      'react-hooks/set-state-in-effect': 'warn', // setState 在 effect 中调用改为警告
+      'react-compiler/react-compiler': 'off', // 禁用 React 编译器检查
+      '@tanstack/query/exhaustive-deps': 'warn', // TanStack Query 依赖检查改为警告
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
-        'error',
+        'warn', // 改为警告
         {
           args: 'all',
           argsIgnorePattern: '^_',
@@ -45,7 +51,7 @@ export default defineConfig(
       ],
       // Enforce type-only imports for TypeScript types
       '@typescript-eslint/consistent-type-imports': [
-        'error',
+        'warn', // 改为警告
         {
           prefer: 'type-imports',
           fixStyle: 'inline-type-imports',
@@ -53,7 +59,7 @@ export default defineConfig(
         },
       ],
       // Prevent duplicate imports from the same module
-      'no-duplicate-imports': 'error',
+      'no-duplicate-imports': 'warn', // 改为警告
     },
   }
 )

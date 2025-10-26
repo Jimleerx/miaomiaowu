@@ -286,14 +286,14 @@ export default function Stash_Producer(): Producer {
                     ['vmess', 'vless'].includes(proxy.type) &&
                     proxy.network === 'http'
                 ) {
-                    let httpPath = proxy['http-opts']?.path;
+                    const httpPath = proxy['http-opts']?.path;
                     if (
                         isPresent(proxy, 'http-opts.path') &&
                         !Array.isArray(httpPath)
                     ) {
                         proxy['http-opts']!.path = [httpPath as string];
                     }
-                    let httpHost = proxy['http-opts']?.headers?.Host;
+                    const httpHost = proxy['http-opts']?.headers?.Host;
                     if (
                         isPresent(proxy, 'http-opts.headers.Host') &&
                         !Array.isArray(httpHost)
@@ -305,14 +305,14 @@ export default function Stash_Producer(): Producer {
                     ['vmess', 'vless'].includes(proxy.type) &&
                     proxy.network === 'h2'
                 ) {
-                    let path = proxy['h2-opts']?.path;
+                    const path = proxy['h2-opts']?.path;
                     if (
                         isPresent(proxy, 'h2-opts.path') &&
                         Array.isArray(path)
                     ) {
                         proxy['h2-opts']!.path = path[0];
                     }
-                    let host = proxy['h2-opts']?.headers?.host;
+                    const host = proxy['h2-opts']?.headers?.host;
                     if (
                         isPresent(proxy, 'h2-opts.headers.Host') &&
                         !Array.isArray(host)
@@ -324,7 +324,7 @@ export default function Stash_Producer(): Producer {
                     const networkPath = proxy[`${proxy.network}-opts`]?.path;
                     if (networkPath) {
                         const reg = /^(.*?)(?:\?ed=(\d+))?$/;
-                        // eslint-disable-next-line no-unused-vars
+                         
                         const [_, path = '', ed = ''] = reg.exec(networkPath) || [];
                         proxy[`${proxy.network}-opts`].path = path;
                         if (ed !== '') {

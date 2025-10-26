@@ -1,4 +1,4 @@
-/* eslint-disable no-case-declarations */
+ 
 const targetPlatform = 'Loon';
 import { isPresent, Result, isIPv4, isIPv6 } from '@/lib/substore/producers/utils';
 
@@ -383,8 +383,8 @@ function vmess(proxy: Proxy, _includeUnsupported?: boolean): string {
             );
         } else if (proxy.network === 'http') {
             result.append(`,transport=http`);
-            let httpPath = proxy['http-opts']?.path;
-            let httpHost = proxy['http-opts']?.headers?.Host;
+            const httpPath = proxy['http-opts']?.path;
+            const httpHost = proxy['http-opts']?.headers?.Host;
             result.appendIfPresent(
                 `,path=${Array.isArray(httpPath) ? httpPath[0] : httpPath}`,
                 'http-opts.path',
@@ -491,8 +491,8 @@ function vless(proxy: Proxy, _includeUnsupported?: boolean): string {
             );
         } else if (proxy.network === 'http') {
             result.append(`,transport=http`);
-            let httpPath = proxy['http-opts']?.path;
-            let httpHost = proxy['http-opts']?.headers?.Host;
+            const httpPath = proxy['http-opts']?.path;
+            const httpHost = proxy['http-opts']?.headers?.Host;
             result.appendIfPresent(
                 `,path=${Array.isArray(httpPath) ? httpPath[0] : httpPath}`,
                 'http-opts.path',

@@ -999,10 +999,10 @@ private-key = ${proxy['private-key']}`);
     const allowedIps = Array.isArray(proxy['allowed-ips'])
         ? proxy['allowed-ips'].join(',')
         : proxy['allowed-ips'];
-    let reserved = Array.isArray(proxy.reserved)
+    const reserved = Array.isArray(proxy.reserved)
         ? proxy.reserved.join('/')
         : proxy.reserved;
-    let presharedKey = proxy['preshared-key'] ?? proxy['pre-shared-key'];
+    const presharedKey = proxy['preshared-key'] ?? proxy['pre-shared-key'];
 
     const peer: any = {
         'public-key': proxy['public-key'],

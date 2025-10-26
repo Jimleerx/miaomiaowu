@@ -20,15 +20,15 @@ import { Upload, Download, Plus, Edit, Settings, FileText, Save, GripVertical, X
 import { EditNodesDialog } from '@/components/edit-nodes-dialog'
 import {
   DndContext,
-  DragEndEvent,
+  type DragEndEvent,
   PointerSensor,
   useSensor,
   useSensors,
   closestCenter,
-  DragStartEvent,
+  type DragStartEvent,
   useDraggable,
   useDroppable,
-  DragOverEvent,
+  type DragOverEvent,
   DragOverlay,
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
@@ -686,29 +686,29 @@ function SubscribeFilesPage() {
     setDragOverGroup(null)
   }
 
-  const handleCardDragOver = (event: DragOverEvent) => {
-    const { active, over } = event
+  // const handleCardDragOver = (event: DragOverEvent) => {
+  //   const { active, over } = event
 
-    if (!over) {
-      if (dragOverGroup) {
-        setDragOverGroup(null)
-      }
-      return
-    }
+  //   if (!over) {
+  //     if (dragOverGroup) {
+  //       setDragOverGroup(null)
+  //     }
+  //     return
+  //   }
 
-    const activeId = String(active.id)
-    if (activeId.startsWith('group-title-')) {
-      const targetGroupName = resolveTargetGroup(over)
-      if (targetGroupName !== dragOverGroup) {
-        setDragOverGroup(targetGroupName)
-      }
-      return
-    }
+  //   const activeId = String(active.id)
+  //   if (activeId.startsWith('group-title-')) {
+  //     const targetGroupName = resolveTargetGroup(over)
+  //     if (targetGroupName !== dragOverGroup) {
+  //       setDragOverGroup(targetGroupName)
+  //     }
+  //     return
+  //   }
 
-    if (dragOverGroup) {
-      setDragOverGroup(null)
-    }
-  }
+  //   if (dragOverGroup) {
+  //     setDragOverGroup(null)
+  //   }
+  // }
 
   // DND Kit 节点排序处理函数（在同一个组内）
   const handleNodeDragEnd = (groupName: string) => (event: DragEndEvent) => {

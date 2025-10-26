@@ -344,8 +344,8 @@ function vmess(proxy: Proxy): string {
         } else {
             throw new Error(`network ${proxy.network} is unsupported`);
         }
-        let transportPath = proxy[`${proxy.network}-opts`]?.path;
-        let transportHost = proxy[`${proxy.network}-opts`]?.headers?.Host;
+        const transportPath = proxy[`${proxy.network}-opts`]?.path;
+        const transportHost = proxy[`${proxy.network}-opts`]?.headers?.Host;
         appendIfPresent(
             `,obfs-uri=${
                 Array.isArray(transportPath) ? (transportPath[0] || '') : transportPath
@@ -427,7 +427,7 @@ function vless(proxy: Proxy): string {
     append(`vless=${proxy.server}:${proxy.port}`);
 
     // The method field for vless should be none.
-    let cipher = 'none';
+    const cipher = 'none';
     // if (proxy.cipher === 'auto') {
     //     cipher = 'chacha20-ietf-poly1305';
     // } else {
@@ -452,8 +452,8 @@ function vless(proxy: Proxy): string {
         } else if (!['tcp'].includes(proxy.network || '')) {
             throw new Error(`network ${proxy.network} is unsupported`);
         }
-        let transportPath = proxy[`${proxy.network}-opts`]?.path;
-        let transportHost = proxy[`${proxy.network}-opts`]?.headers?.Host;
+        const transportPath = proxy[`${proxy.network}-opts`]?.path;
+        const transportHost = proxy[`${proxy.network}-opts`]?.headers?.Host;
         appendIfPresent(
             `,obfs-uri=${
                 Array.isArray(transportPath) ? (transportPath[0] || '') : transportPath

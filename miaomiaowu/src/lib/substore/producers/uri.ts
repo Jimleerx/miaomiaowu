@@ -187,10 +187,10 @@ function vless(proxy: Proxy): string {
         }
     }
 
-    let vlessTransportServiceName =
+    const vlessTransportServiceName =
         proxy[`${proxy.network}-opts`]?.[`${proxy.network}-service-name`];
-    let vlessTransportPath = proxy[`${proxy.network}-opts`]?.path;
-    let vlessTransportHost = proxy[`${proxy.network}-opts`]?.headers?.Host;
+    const vlessTransportPath = proxy[`${proxy.network}-opts`]?.path;
+    const vlessTransportHost = proxy[`${proxy.network}-opts`]?.headers?.Host;
     if (vlessTransportPath) {
         vlessTransport += `&path=${encodeURIComponent(
             Array.isArray(vlessTransportPath)
@@ -363,9 +363,9 @@ export default function URI_Producer(): Producer {
                 }
                 // obfs
                 if (proxy.network) {
-                    let vmessTransportPath =
+                    const vmessTransportPath =
                         proxy[`${proxy.network}-opts`]?.path;
-                    let vmessTransportHost =
+                    const vmessTransportHost =
                         proxy[`${proxy.network}-opts`]?.headers?.Host;
 
                     if (['grpc'].includes(proxy.network)) {
@@ -423,11 +423,11 @@ export default function URI_Producer(): Producer {
                     }
                     trojanTransport = `&type=${encodeURIComponent(trojanType)}`;
                     if (['grpc'].includes(proxy.network)) {
-                        let trojanTransportServiceName =
+                        const trojanTransportServiceName =
                             proxy[`${proxy.network}-opts`]?.[
                                 `${proxy.network}-service-name`
                             ];
-                        let trojanTransportAuthority =
+                        const trojanTransportAuthority =
                             proxy[`${proxy.network}-opts`]?.['_grpc-authority'];
                         if (trojanTransportServiceName) {
                             trojanTransport += `&serviceName=${encodeURIComponent(
@@ -444,9 +444,9 @@ export default function URI_Producer(): Producer {
                                 'gun',
                         )}`;
                     }
-                    let trojanTransportPath =
+                    const trojanTransportPath =
                         proxy[`${proxy.network}-opts`]?.path;
-                    let trojanTransportHost =
+                    const trojanTransportHost =
                         proxy[`${proxy.network}-opts`]?.headers?.Host;
                     if (trojanTransportPath) {
                         trojanTransport += `&path=${encodeURIComponent(
@@ -516,7 +516,7 @@ export default function URI_Producer(): Producer {
                 )}`;
                 break;
             case 'hysteria2':
-                let hysteria2params: string[] = [];
+                const hysteria2params: string[] = [];
                 if (proxy['hop-interval']) {
                     hysteria2params.push(
                         `hop-interval=${proxy['hop-interval']}`,
@@ -565,7 +565,7 @@ export default function URI_Producer(): Producer {
                 )}#${encodeURIComponent(proxy.name)}`;
                 break;
             case 'hysteria':
-                let hysteriaParams: string[] = [];
+                const hysteriaParams: string[] = [];
                 Object.keys(proxy).forEach((key) => {
                     if (!['name', 'type', 'server', 'port'].includes(key)) {
                         const i = key.replace(/-/, '_');
@@ -621,7 +621,7 @@ export default function URI_Producer(): Producer {
 
             case 'tuic':
                 if (!proxy.token || proxy.token.length === 0) {
-                    let tuicParams: string[] = [];
+                    const tuicParams: string[] = [];
                     Object.keys(proxy).forEach((key) => {
                         if (
                             ![
@@ -694,7 +694,7 @@ export default function URI_Producer(): Producer {
                     network: proxy.network || 'tcp',
                 }).replace('vless', 'anytls');
                 // 偷个懒
-                let anytlsParams: string[] = [];
+                const anytlsParams: string[] = [];
                 Object.keys(proxy).forEach((key) => {
                     if (
                         ![
@@ -742,8 +742,8 @@ export default function URI_Producer(): Producer {
                 });
                 // Parse existing query parameters from result
                 const urlParts = result.split('?');
-                let baseUrl = urlParts[0];
-                let existingParams: Record<string, string> = {};
+                const baseUrl = urlParts[0];
+                const existingParams: Record<string, string> = {};
 
                 if (urlParts.length > 1) {
                     const queryString = urlParts[1].split('#')[0]; // Remove fragment if exists
@@ -776,7 +776,7 @@ export default function URI_Producer(): Producer {
                 result = `${baseUrl}?${newParams}${fragment}`;
                 break;
             case 'wireguard':
-                let wireguardParams: string[] = [];
+                const wireguardParams: string[] = [];
 
                 Object.keys(proxy).forEach((key) => {
                     if (

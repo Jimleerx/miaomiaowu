@@ -1,4 +1,4 @@
-/* eslint-disable no-case-declarations */
+ 
 import { Base64 } from 'js-base64';
 import URI_Producer from './uri';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ interface Producer {
 export default function V2Ray_Producer(): Producer {
     const type = 'ALL';
     const produce = (proxies: Proxy[]): string => {
-        let result: string[] = [];
+        const result: string[] = [];
         proxies.map((proxy) => {
             try {
                 result.push(URI.produce(proxy as any));
