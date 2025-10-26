@@ -479,9 +479,20 @@ function SubscriptionGeneratorPage() {
         // 获取落地节点组中的所有节点名称
         const landingNodeNames = new Set(landingGroup.proxies.filter((p): p is string => p !== undefined))
 
-        // 给这些节点添加 dialer-proxy 参数
+        // 创建节点名称到协议的映射
+        const nodeProtocolMap = new Map<string, string>()
+        savedNodes.forEach(node => {
+          nodeProtocolMap.set(node.node_name, node.protocol)
+        })
+
+        // 给这些节点添加 dialer-proxy 参数（跳过已经是链式代理的节点）
         parsedConfig.proxies = parsedConfig.proxies.map((proxy: any) => {
           if (landingNodeNames.has(proxy.name)) {
+            // 通过协议判断是否为链式代理节点（协议包含 ⇋）
+            const protocol = nodeProtocolMap.get(proxy.name)
+            if (protocol && protocol.includes('⇋')) {
+              return proxy
+            }
             return {
               ...proxy,
               'dialer-proxy': '🌠 中转节点'

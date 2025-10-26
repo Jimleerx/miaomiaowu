@@ -20,6 +20,7 @@ import { parseProxyUrl, toClashProxy, type ProxyNode, type ClashProxy } from '@/
 import { Check, Pencil, X, Undo2, Activity, Eye } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import IpIcon from '@/assets/icons/ip.svg'
+import ExchangeIcon from '@/assets/icons/exchange.svg'
 
 // @ts-ignore - retained simple route definition
 export const Route = createFileRoute('/nodes/')({
@@ -103,6 +104,8 @@ function NodesPage() {
   const [ipMenuState, setIpMenuState] = useState<{ nodeId: string; ips: string[] } | null>(null) // IP选择菜单状态
   const [probeBindingDialogOpen, setProbeBindingDialogOpen] = useState(false)
   const [selectedNodeForProbe, setSelectedNodeForProbe] = useState<ParsedNode | null>(null)
+  const [exchangeDialogOpen, setExchangeDialogOpen] = useState(false)
+  const [sourceNodeForExchange, setSourceNodeForExchange] = useState<ParsedNode | null>(null)
 
   // 获取用户配置
   const { data: userConfig } = useQuery({
@@ -426,6 +429,52 @@ function NodesPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || '清空失败')
+    },
+  })
+
+  // 创建链式代理节点
+  const createRelayNodeMutation = useMutation({
+    mutationFn: async ({ sourceNode, targetNode }: { sourceNode: ParsedNode; targetNode: ParsedNode }) => {
+      // 解析源节点的 clash 配置
+      let sourceClashConfig: ClashProxy
+      try {
+        sourceClashConfig = JSON.parse(sourceNode.clash_config)
+      } catch (e) {
+        throw new Error('源节点配置解析失败')
+      }
+
+      // 创建新的节点名称：源节点名称⇋目标节点名称
+      const newNodeName = `${sourceNode.node_name}⇋${targetNode.node_name}`
+
+      // 添加 dialer-proxy 属性
+      const newClashConfig = {
+        ...sourceClashConfig,
+        name: newNodeName,
+        'dialer-proxy': targetNode.node_name,
+      }
+
+      // 创建新节点
+      const response = await api.post('/api/admin/nodes', {
+        raw_url: sourceNode.raw_url, // 使用源节点的原始URL
+        node_name: newNodeName,
+        protocol: `${sourceNode.protocol}⇋${targetNode.protocol}`,
+        parsed_config: JSON.stringify(newClashConfig), // 使用clash配置作为parsed配置
+        clash_config: JSON.stringify(newClashConfig),
+        enabled: true,
+        tag: '链式代理',
+        original_server: sourceNode.original_server,
+        probe_server: sourceNode.probe_server || '',
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      toast.success('链式代理节点创建成功')
+      setExchangeDialogOpen(false)
+      setSourceNodeForExchange(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '创建链式代理节点失败')
     },
   })
 
@@ -864,9 +913,15 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                               {node.parsed ? (
                                 <Badge
                                   variant='outline'
-                                  className={PROTOCOL_COLORS[node.parsed.type] || 'bg-gray-500/10'}
+                                  className={
+                                    node.dbNode?.protocol?.includes('⇋')
+                                      ? 'bg-pink-500/10 text-pink-700 border-pink-200 dark:text-pink-300 dark:border-pink-800'
+                                      : PROTOCOL_COLORS[node.parsed.type] || 'bg-gray-500/10'
+                                  }
                                 >
-                                  {node.parsed.type.toUpperCase()}
+                                  {node.dbNode?.protocol?.includes('⇋')
+                                    ? node.dbNode.protocol.toUpperCase()
+                                    : node.parsed.type.toUpperCase()}
                                 </Badge>
                               ) : (
                                 <Badge variant='destructive'>解析失败</Badge>
@@ -926,6 +981,19 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                                   >
                                     <Pencil className='size-4' />
                                   </Button>
+                                  {node.isSaved && (
+                                    <Button
+                                      variant='ghost'
+                                      size='icon'
+                                      className='size-7 text-muted-foreground'
+                                      onClick={() => {
+                                        setSourceNodeForExchange(node.dbNode)
+                                        setExchangeDialogOpen(true)
+                                      }}
+                                    >
+                                      <img src={ExchangeIcon} alt='交换' className='size-4' />
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </TableCell>
@@ -1191,6 +1259,60 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
             ) : (
               <div className='text-center text-sm text-muted-foreground py-8'>
                 暂无可用的探针服务器
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 节点交换对话框 */}
+      <Dialog open={exchangeDialogOpen} onOpenChange={setExchangeDialogOpen}>
+        <DialogContent className='max-w-2xl max-h-[80vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle>创建链式代理节点</DialogTitle>
+            <DialogDescription>
+              选择目标节点与 "{sourceNodeForExchange?.node_name}" 创建链式代理
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            {savedNodes && savedNodes.length > 0 ? (
+              <div className='space-y-2'>
+                {savedNodes
+                  .filter(node => node.id !== sourceNodeForExchange?.id) // 排除源节点自己
+                  .map((node) => (
+                    <Button
+                      key={node.id}
+                      variant='outline'
+                      className='w-full justify-start text-left h-auto py-3'
+                      onClick={() => {
+                        if (sourceNodeForExchange) {
+                          createRelayNodeMutation.mutate({
+                            sourceNode: sourceNodeForExchange,
+                            targetNode: node
+                          })
+                        }
+                      }}
+                      disabled={createRelayNodeMutation.isPending}
+                    >
+                      <div className='flex flex-col gap-2 w-full items-start'>
+                        <div className='flex items-center gap-2 w-full flex-wrap'>
+                          <span className='font-medium'>{node.node_name}</span>
+                          <span className='text-xs text-muted-foreground'>
+                            {node.protocol} - {node.original_server}
+                          </span>
+                        </div>
+                        {node.tag && (
+                          <Badge variant='secondary' className='text-xs'>
+                            {node.tag}
+                          </Badge>
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+              </div>
+            ) : (
+              <div className='text-center text-sm text-muted-foreground py-8'>
+                暂无可用的节点
               </div>
             )}
           </div>
