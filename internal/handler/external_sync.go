@@ -82,8 +82,12 @@ func syncSingleExternalSubscription(ctx context.Context, client *http.Client, re
 		return 0, sub, fmt.Errorf("create request: %w", err)
 	}
 
-	// 与OpenClash使用的UA一致
-	req.Header.Set("User-Agent", "clash-verge/v1.5.1")
+	// 使用订阅保存的 User-Agent，如果为空则使用默认值
+	userAgent := sub.UserAgent
+	if userAgent == "" {
+		userAgent = "clash-meta/2.4.0"
+	}
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {

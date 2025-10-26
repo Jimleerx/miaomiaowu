@@ -518,7 +518,8 @@ func (h *nodesHandler) handleFetchSubscription(w http.ResponseWriter, r *http.Re
 	}
 
 	var req struct {
-		URL string `json:"url"`
+		URL       string `json:"url"`
+		UserAgent string `json:"user_agent"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -529,6 +530,12 @@ func (h *nodesHandler) handleFetchSubscription(w http.ResponseWriter, r *http.Re
 	if req.URL == "" {
 		writeBadRequest(w, "订阅URL是必填项")
 		return
+	}
+
+	// 如果没有提供 User-Agent，使用默认值
+	userAgent := req.UserAgent
+	if userAgent == "" {
+		userAgent = "clash-meta/2.4.0"
 	}
 
 	// 创建HTTP客户端并获取订阅内容
@@ -542,8 +549,8 @@ func (h *nodesHandler) handleFetchSubscription(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// 添加User-Agent头，模拟Clash客户端
-	httpReq.Header.Set("User-Agent", "clash-meta/2.4.0")
+	// 添加User-Agent头
+	httpReq.Header.Set("User-Agent", userAgent)
 
 	resp, err := client.Do(httpReq)
 	if err != nil {

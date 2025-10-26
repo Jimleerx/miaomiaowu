@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -9,6 +9,8 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
@@ -95,6 +97,8 @@ function NodesPage() {
   const queryClient = useQueryClient()
   const [input, setInput] = useState('')
   const [subscriptionUrl, setSubscriptionUrl] = useState('')
+  const [userAgent, setUserAgent] = useState<string>('clash.meta')
+  const [customUserAgent, setCustomUserAgent] = useState<string>('')
   const [tempNodes, setTempNodes] = useState<TempNode[]>([])
   const [selectedProtocol, setSelectedProtocol] = useState<string>('all')
   const [currentTag, setCurrentTag] = useState<string>('manual') // 'manual' 或 'subscription'
@@ -106,6 +110,19 @@ function NodesPage() {
   const [selectedNodeForProbe, setSelectedNodeForProbe] = useState<ParsedNode | null>(null)
   const [exchangeDialogOpen, setExchangeDialogOpen] = useState(false)
   const [sourceNodeForExchange, setSourceNodeForExchange] = useState<ParsedNode | null>(null)
+
+  // 优化的回调函数
+  const handleUserAgentChange = useCallback((value: string) => {
+    setUserAgent(value)
+  }, [])
+
+  const handleCustomUserAgentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomUserAgent(e.target.value)
+  }, [])
+
+  const handleSubscriptionUrlChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSubscriptionUrl(e.target.value)
+  }, [])
 
   // 获取用户配置
   const { data: userConfig } = useQuery({
@@ -480,11 +497,14 @@ function NodesPage() {
 
   // 从订阅获取节点
   const fetchSubscriptionMutation = useMutation({
-    mutationFn: async (url: string) => {
-      const response = await api.post('/api/admin/nodes/fetch-subscription', { url })
+    mutationFn: async ({ url, userAgent }: { url: string; userAgent: string }) => {
+      const response = await api.post('/api/admin/nodes/fetch-subscription', {
+        url,
+        user_agent: userAgent
+      })
       return response.data as { proxies: ClashProxy[]; count: number }
     },
-    onSuccess: async (data, url) => {
+    onSuccess: async (data, variables) => {
       // 将Clash节点转换为TempNode格式
       const parsed: TempNode[] = data.proxies.map((clashNode) => {
         // Clash节点已经是标准格式，直接作为ProxyNode和ClashProxy使用
@@ -516,12 +536,13 @@ function NodesPage() {
       // 保存外部订阅链接
       try {
         // 从 URL 中提取名称（使用域名或者最后一部分）
-        const urlObj = new URL(url)
+        const urlObj = new URL(variables.url)
         const name = urlObj.hostname || '外部订阅'
 
         await api.post('/api/user/external-subscriptions', {
           name: name,
-          url: url,
+          url: variables.url,
+          user_agent: variables.userAgent, // 保存 User-Agent
         })
       } catch (error) {
         // 如果保存失败（比如已经存在），忽略错误
@@ -638,7 +659,19 @@ function NodesPage() {
       toast.error('请输入订阅链接')
       return
     }
-    fetchSubscriptionMutation.mutate(subscriptionUrl)
+
+    // 确定使用哪个 User-Agent
+    const finalUserAgent = userAgent === '手动输入' ? customUserAgent : userAgent
+
+    if (userAgent === '手动输入' && !customUserAgent.trim()) {
+      toast.error('请输入自定义 User-Agent')
+      return
+    }
+
+    fetchSubscriptionMutation.mutate({
+      url: subscriptionUrl,
+      userAgent: finalUserAgent
+    })
   }
 
   // 合并保存的节点和临时节点用于显示
@@ -768,12 +801,34 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                     <Input
                       placeholder='https://example.com/api/clash/subscribe?token=xxx'
                       value={subscriptionUrl}
-                      onChange={(e) => setSubscriptionUrl(e.target.value)}
+                      onChange={handleSubscriptionUrlChange}
                       className='font-mono text-sm'
                     />
                     <p className='text-xs text-muted-foreground'>
                       请输入 Clash 订阅链接，系统将自动获取并解析节点
                     </p>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <Label htmlFor='user-agent' className='whitespace-nowrap'>User-Agent:</Label>
+                    <Select value={userAgent} onValueChange={handleUserAgentChange}>
+                      <SelectTrigger id='user-agent' className='w-[200px]'>
+                        <SelectValue placeholder='选择 User-Agent' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='clash.meta'>clash.meta</SelectItem>
+                        <SelectItem value='clash-verge/v1.5.1'>clash-verge/v1.5.1</SelectItem>
+                        <SelectItem value='Clash'>Clash</SelectItem>
+                        <SelectItem value='手动输入'>手动输入</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {userAgent === '手动输入' && (
+                      <Input
+                        placeholder='输入自定义 User-Agent'
+                        value={customUserAgent}
+                        onChange={handleCustomUserAgentChange}
+                        className='font-mono text-sm flex-1'
+                      />
+                    )}
                   </div>
                   <div className='flex justify-end gap-2'>
                     <Button

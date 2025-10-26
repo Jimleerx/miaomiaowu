@@ -13,14 +13,16 @@ import (
 )
 
 type externalSubscriptionRequest struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name      string `json:"name"`
+	URL       string `json:"url"`
+	UserAgent string `json:"user_agent"`
 }
 
 type externalSubscriptionResponse struct {
 	ID         int64   `json:"id"`
 	Name       string  `json:"name"`
 	URL        string  `json:"url"`
+	UserAgent  string  `json:"user_agent"`
 	NodeCount  int     `json:"node_count"`
 	LastSyncAt *string `json:"last_sync_at"`
 	Upload     int64   `json:"upload"`      // 已上传流量（字节）
@@ -83,6 +85,7 @@ func handleListExternalSubscriptions(w http.ResponseWriter, r *http.Request, rep
 			ID:         sub.ID,
 			Name:       sub.Name,
 			URL:        sub.URL,
+			UserAgent:  sub.UserAgent,
 			NodeCount:  sub.NodeCount,
 			LastSyncAt: lastSyncAt,
 			Upload:     sub.Upload,
@@ -123,6 +126,7 @@ func handleCreateExternalSubscription(w http.ResponseWriter, r *http.Request, re
 		Username:   username,
 		Name:       name,
 		URL:        url,
+		UserAgent:  payload.UserAgent, // 会在存储层使用默认值如果为空
 		NodeCount:  0,
 		LastSyncAt: &now,
 	}
@@ -159,6 +163,7 @@ func handleCreateExternalSubscription(w http.ResponseWriter, r *http.Request, re
 		ID:         created.ID,
 		Name:       created.Name,
 		URL:        created.URL,
+		UserAgent:  created.UserAgent,
 		NodeCount:  created.NodeCount,
 		LastSyncAt: lastSyncAt,
 		Upload:     created.Upload,
@@ -220,8 +225,13 @@ func handleUpdateExternalSubscription(w http.ResponseWriter, r *http.Request, re
 		Username:   username,
 		Name:       name,
 		URL:        url,
+		UserAgent:  payload.UserAgent, // 会在存储层使用默认值如果为空
 		NodeCount:  existing.NodeCount,
 		LastSyncAt: existing.LastSyncAt,
+		Upload:     existing.Upload,
+		Download:   existing.Download,
+		Total:      existing.Total,
+		Expire:     existing.Expire,
 	}
 
 	if err := repo.UpdateExternalSubscription(r.Context(), sub); err != nil {
@@ -255,6 +265,7 @@ func handleUpdateExternalSubscription(w http.ResponseWriter, r *http.Request, re
 		ID:         updated.ID,
 		Name:       updated.Name,
 		URL:        updated.URL,
+		UserAgent:  updated.UserAgent,
 		NodeCount:  updated.NodeCount,
 		LastSyncAt: lastSyncAt,
 		Upload:     updated.Upload,
