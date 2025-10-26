@@ -19,7 +19,7 @@ import (
 	"traffic-info/subscribes"
 )
 
-const version = "0.1.1"
+const version = "0.1.2"
 
 func main() {
 	addr := getAddr()
