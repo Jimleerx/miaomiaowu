@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { LogOut, Settings2, Sliders, ExternalLink } from 'lucide-react'
+import { LogOut, Settings2, Sliders, ExternalLink, BookOpen } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { SignOutDialog } from '@/components/sign-out-dialog'
 import {
@@ -82,6 +82,11 @@ export function UserMenu() {
           <DropdownMenuItem asChild className='cursor-pointer justify-center'>
             <Link to='/system-settings' className='flex items-center gap-2'>
               <Sliders className='size-4' /> 系统设置
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className='cursor-pointer justify-center'>
+            <Link to='/docs' className='flex items-center gap-2'>
+              <BookOpen className='size-4' /> 使用帮助
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
