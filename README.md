@@ -451,7 +451,6 @@ MIT License
 - 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
 - 🛠️ vless节点转v2ray时servername没有转换成sni
 ## 更新日志
-## 更新日志
 ### v0.1.2 (2025-10-27)
 - 🌈 添加自定义规则配置
 - 🌈 节点编辑代理组支持拖动排序
