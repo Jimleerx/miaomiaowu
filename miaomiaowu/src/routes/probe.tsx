@@ -90,7 +90,7 @@ function ProbeManagePage() {
   const queryClient = useQueryClient()
 
   const [formState, setFormState] = useState({
-    probeType: 'nezha',
+    probeType: '',
     address: '',
     servers: [] as ServerForm[],
   })
@@ -127,7 +127,7 @@ function ProbeManagePage() {
     }
 
     const normalizedType = (config.probe_type ?? '').toLowerCase().trim()
-    const fallbackType = PROBE_TYPES[0]?.value ?? ''
+    const fallbackType = PROBE_TYPES[0]?.value ?? 'nezha'
     const matchedType = PROBE_TYPES.some((item) => item.value === normalizedType)
       ? normalizedType
       : fallbackType
@@ -484,6 +484,7 @@ function ProbeManagePage() {
                 <div className='space-y-2'>
                   <Label htmlFor='probe-type'>探针类型</Label>
                   <Select
+                    key={formState.probeType}
                     value={formState.probeType}
                     onValueChange={(value) =>
                       setFormState((prev) => ({ ...prev, probeType: value }))
