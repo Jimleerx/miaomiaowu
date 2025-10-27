@@ -541,7 +541,7 @@ function ProbeManagePage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className='overflow-x-auto'>
+              <div className='overflow-x-auto max-h-[600px] overflow-y-auto'>
                 <Table>
                   <TableHeader>
                     <TableRow>
