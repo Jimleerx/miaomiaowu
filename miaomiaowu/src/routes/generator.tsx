@@ -108,6 +108,7 @@ function SubscriptionGeneratorPage() {
   const [clashConfig, setClashConfig] = useState('')
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<number>>(new Set())
   const [protocolFilter, setProtocolFilter] = useState<string>('all')
+  const [tagFilter, setTagFilter] = useState<string>('all')
 
   // 规则模式状态
   const [ruleMode, setRuleMode] = useState<'custom' | 'template'>('custom')
@@ -164,10 +165,15 @@ function SubscriptionGeneratorPage() {
   // 获取所有协议类型
   const protocols = Array.from(new Set(enabledNodes.map(n => n.protocol.toLowerCase()))).sort()
 
-  // 根据协议筛选节点
-  const filteredNodes = protocolFilter === 'all'
-    ? enabledNodes
-    : enabledNodes.filter(n => n.protocol.toLowerCase() === protocolFilter)
+  // 获取所有标签类型
+  const tags = Array.from(new Set(enabledNodes.map(n => n.tag))).sort()
+
+  // 根据协议和标签筛选节点
+  const filteredNodes = enabledNodes.filter(n => {
+    const protocolMatch = protocolFilter === 'all' || n.protocol.toLowerCase() === protocolFilter
+    const tagMatch = tagFilter === 'all' || n.tag === tagFilter
+    return protocolMatch && tagMatch
+  })
 
   const handleToggleNode = (nodeId: number) => {
     const newSet = new Set(selectedNodeIds)
@@ -970,11 +976,19 @@ function SubscriptionGeneratorPage() {
               ) : (
                 <>
                   {/* 协议筛选按钮 */}
-                  <div className='flex flex-wrap gap-2'>
+                  <div className='flex flex-wrap gap-2 mb-4'>
                     <Button
                       variant={protocolFilter === 'all' ? 'default' : 'outline'}
                       size='sm'
-                      onClick={() => setProtocolFilter('all')}
+                      onClick={() => {
+                        setProtocolFilter('all')
+                        // 全选所有符合当前标签筛选的节点
+                        const nodesToSelect = enabledNodes.filter(n => {
+                          const tagMatch = tagFilter === 'all' || n.tag === tagFilter
+                          return tagMatch
+                        })
+                        setSelectedNodeIds(new Set(nodesToSelect.map(n => n.id)))
+                      }}
                     >
                       全部 ({enabledNodes.length})
                     </Button>
@@ -985,13 +999,65 @@ function SubscriptionGeneratorPage() {
                           key={protocol}
                           variant={protocolFilter === protocol ? 'default' : 'outline'}
                           size='sm'
-                          onClick={() => setProtocolFilter(protocol)}
+                          onClick={() => {
+                            setProtocolFilter(protocol)
+                            // 全选符合该协议和当前标签筛选的节点
+                            const nodesToSelect = enabledNodes.filter(n => {
+                              const protocolMatch = n.protocol.toLowerCase() === protocol
+                              const tagMatch = tagFilter === 'all' || n.tag === tagFilter
+                              return protocolMatch && tagMatch
+                            })
+                            setSelectedNodeIds(new Set(nodesToSelect.map(n => n.id)))
+                          }}
                         >
                           {protocol.toUpperCase()} ({count})
                         </Button>
                       )
                     })}
                   </div>
+
+                  {/* 标签筛选按钮 */}
+                  {tags.length > 0 && (
+                    <div className='flex flex-wrap gap-2 mb-4'>
+                      <Button
+                        variant={tagFilter === 'all' ? 'default' : 'outline'}
+                        size='sm'
+                        onClick={() => {
+                          setTagFilter('all')
+                          // 全选所有符合当前协议筛选的节点
+                          const nodesToSelect = enabledNodes.filter(n => {
+                            const protocolMatch = protocolFilter === 'all' || n.protocol.toLowerCase() === protocolFilter
+                            return protocolMatch
+                          })
+                          setSelectedNodeIds(new Set(nodesToSelect.map(n => n.id)))
+                        }}
+                      >
+                        全部标签 ({enabledNodes.length})
+                      </Button>
+                      {tags.map((tag) => {
+                        const count = enabledNodes.filter(n => n.tag === tag).length
+                        return (
+                          <Button
+                            key={tag}
+                            variant={tagFilter === tag ? 'default' : 'outline'}
+                            size='sm'
+                            onClick={() => {
+                              setTagFilter(tag)
+                              // 全选符合该标签和当前协议筛选的节点
+                              const nodesToSelect = enabledNodes.filter(n => {
+                                const protocolMatch = protocolFilter === 'all' || n.protocol.toLowerCase() === protocolFilter
+                                const tagMatch = n.tag === tag
+                                return protocolMatch && tagMatch
+                              })
+                              setSelectedNodeIds(new Set(nodesToSelect.map(n => n.id)))
+                            }}
+                          >
+                            {tag} ({count})
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  )}
 
                   <div className='rounded-md border'>
                   <Table>

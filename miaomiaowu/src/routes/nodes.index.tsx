@@ -111,6 +111,10 @@ function NodesPage() {
   const [exchangeDialogOpen, setExchangeDialogOpen] = useState(false)
   const [sourceNodeForExchange, setSourceNodeForExchange] = useState<ParsedNode | null>(null)
 
+  // 自定义标签状态
+  const [manualTag, setManualTag] = useState<string>('手动输入')
+  const [subscriptionTag, setSubscriptionTag] = useState<string>('')
+
   // 优化的回调函数
   const handleUserAgentChange = useCallback((value: string) => {
     setUserAgent(value)
@@ -371,7 +375,10 @@ function NodesPage() {
   // 批量创建节点
   const batchCreateMutation = useMutation({
     mutationFn: async (nodes: TempNode[]) => {
-      const tag = currentTag === 'manual' ? '手动输入' : '订阅导入'
+      // 根据当前标签类型使用对应的自定义标签
+      const tag = currentTag === 'manual'
+        ? (manualTag.trim() || '手动输入')
+        : (subscriptionTag.trim() || '订阅导入')
 
       const payload = nodes.map(n => ({
         raw_url: n.rawUrl,
@@ -519,18 +526,41 @@ function NodesPage() {
         const parsedProxy = cloneProxyWithName(proxyNode, name)
         const clashProxy = cloneProxyWithName(clashNode, name)
 
+        // 提取服务器名称用于标签
+        let defaultTag = '外部订阅'
+        try {
+          const urlObj = new URL(variables.url)
+          defaultTag = urlObj.hostname || '外部订阅'
+        } catch {
+          // URL解析失败时使用默认标签
+        }
+
         return {
           id: Math.random().toString(36).substring(7),
-          rawUrl: '', // Clash订阅的节点没有原始URL
+          rawUrl: variables.url, // 使用订阅链接地址
           name,
           parsed: parsedProxy,
           clash: clashProxy,
           enabled: true,
+          tag: subscriptionTag.trim() || defaultTag, // 添加标签信息
         }
       })
 
       setTempNodes(parsed)
       setCurrentTag('subscription') // 订阅导入
+
+      // 如果用户没有设置标签，自动使用服务器地址作为标签
+      if (!subscriptionTag.trim()) {
+        let serverName = '外部订阅'
+        try {
+          const urlObj = new URL(variables.url)
+          serverName = urlObj.hostname || '外部订阅'
+        } catch {
+          // URL解析失败时使用默认标签
+        }
+        setSubscriptionTag(serverName)
+      }
+
       toast.success(`成功导入 ${data.count} 个节点`)
 
       // 保存外部订阅链接
@@ -575,6 +605,7 @@ function NodesPage() {
         parsed: normalizedParsed,
         clash: normalizedClash,
         enabled: true,
+        tag: manualTag.trim() || '手动输入', // 添加标签信息
       })
     }
 
@@ -783,6 +814,21 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                     onChange={(e) => setInput(e.target.value)}
                     className='min-h-[200px] font-mono text-sm'
                   />
+                  <div className='space-y-2'>
+                    <Label htmlFor='manual-tag' className='text-sm font-medium'>
+                      节点标签
+                    </Label>
+                    <Input
+                      id='manual-tag'
+                      placeholder='手动输入'
+                      value={manualTag}
+                      onChange={(e) => setManualTag(e.target.value)}
+                      className='font-mono text-sm'
+                    />
+                    <p className='text-xs text-muted-foreground'>
+                      为这些节点设置标签，用于节点管理中的分类和筛选
+                    </p>
+                  </div>
                   <div className='flex justify-end gap-2'>
                     <Button onClick={handleParse} disabled={!input.trim()} variant='outline'>
                       解析节点
@@ -829,6 +875,21 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                         className='font-mono text-sm flex-1'
                       />
                     )}
+                  </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='subscription-tag' className='text-sm font-medium'>
+                      节点标签
+                    </Label>
+                    <Input
+                      id='subscription-tag'
+                      placeholder='默认使用服务器地址作为标签'
+                      value={subscriptionTag}
+                      onChange={(e) => setSubscriptionTag(e.target.value)}
+                      className='font-mono text-sm'
+                    />
+                    <p className='text-xs text-muted-foreground'>
+                      为订阅导入的节点设置标签，留空将使用服务器地址作为标签
+                    </p>
                   </div>
                   <div className='flex justify-end gap-2'>
                     <Button
@@ -1058,11 +1119,12 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                             </TableCell>
                             <TableCell>
                               <div className='flex flex-wrap gap-1'>
-                                {node.isSaved && node.tag && (
-                                  <Badge variant='secondary' className='text-xs'>
-                                    {node.tag}
-                                  </Badge>
-                                )}
+                                <Badge
+                                  variant='secondary'
+                                  className='text-xs'
+                                >
+                                  {node.dbNode?.tag || node.tag || (currentTag === 'manual' ? manualTag.trim() || '手动输入' : currentTag === 'subscription' ? subscriptionTag.trim() || '订阅导入' : '未知')}
+                                </Badge>
                                 {node.isSaved && node.dbNode?.probe_server && (
                                   <Badge variant='secondary' className='text-xs flex items-center gap-1'>
                                     <Activity className='size-3' />
