@@ -1024,12 +1024,22 @@ function SubscriptionGeneratorPage() {
                         size='sm'
                         onClick={() => {
                           setTagFilter('all')
-                          // 全选所有符合当前协议筛选的节点
+                          // 计算应该选中的节点
                           const nodesToSelect = enabledNodes.filter(n => {
                             const protocolMatch = protocolFilter === 'all' || n.protocol.toLowerCase() === protocolFilter
                             return protocolMatch
                           })
-                          setSelectedNodeIds(new Set(nodesToSelect.map(n => n.id)))
+                          const nodeIdsToSelect = new Set(nodesToSelect.map(n => n.id))
+
+                          // 如果当前选中的节点和应该选中的节点完全一致，则取消选中
+                          const currentIds = Array.from(selectedNodeIds).sort()
+                          const targetIds = Array.from(nodeIdsToSelect).sort()
+                          if (tagFilter === 'all' && currentIds.length === targetIds.length &&
+                              currentIds.every((id, i) => id === targetIds[i])) {
+                            setSelectedNodeIds(new Set())
+                          } else {
+                            setSelectedNodeIds(nodeIdsToSelect)
+                          }
                         }}
                       >
                         全部标签 ({enabledNodes.length})
@@ -1043,13 +1053,23 @@ function SubscriptionGeneratorPage() {
                             size='sm'
                             onClick={() => {
                               setTagFilter(tag)
-                              // 全选符合该标签和当前协议筛选的节点
+                              // 计算应该选中的节点
                               const nodesToSelect = enabledNodes.filter(n => {
                                 const protocolMatch = protocolFilter === 'all' || n.protocol.toLowerCase() === protocolFilter
                                 const tagMatch = n.tag === tag
                                 return protocolMatch && tagMatch
                               })
-                              setSelectedNodeIds(new Set(nodesToSelect.map(n => n.id)))
+                              const nodeIdsToSelect = new Set(nodesToSelect.map(n => n.id))
+
+                              // 如果当前选中的节点和应该选中的节点完全一致，则取消选中
+                              const currentIds = Array.from(selectedNodeIds).sort()
+                              const targetIds = Array.from(nodeIdsToSelect).sort()
+                              if (tagFilter === tag && currentIds.length === targetIds.length &&
+                                  currentIds.every((id, i) => id === targetIds[i])) {
+                                setSelectedNodeIds(new Set())
+                              } else {
+                                setSelectedNodeIds(nodeIdsToSelect)
+                              }
                             }}
                           >
                             {tag} ({count})

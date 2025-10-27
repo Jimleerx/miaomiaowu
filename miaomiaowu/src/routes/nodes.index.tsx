@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -114,6 +115,11 @@ function NodesPage() {
   // 自定义标签状态
   const [manualTag, setManualTag] = useState<string>('手动输入')
   const [subscriptionTag, setSubscriptionTag] = useState<string>('')
+
+  // 批量操作状态
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<number>>(new Set())
+  const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false)
+  const [batchTag, setBatchTag] = useState<string>('')
 
   // 优化的回调函数
   const handleUserAgentChange = useCallback((value: string) => {
@@ -456,6 +462,38 @@ function NodesPage() {
     },
   })
 
+  // 批量更新节点标签
+  const batchUpdateTagMutation = useMutation({
+    mutationFn: async ({ nodeIds, tag }: { nodeIds: number[]; tag: string }) => {
+      const promises = nodeIds.map((id) => {
+        const node = savedNodes.find(n => n.id === id)
+        if (!node) return Promise.resolve()
+
+        return api.put(`/api/admin/nodes/${id}`, {
+          raw_url: node.raw_url,
+          node_name: node.node_name,
+          protocol: node.protocol,
+          parsed_config: node.parsed_config,
+          clash_config: node.clash_config,
+          enabled: node.enabled,
+          tag: tag,
+        })
+      })
+      await Promise.all(promises)
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      toast.success(`成功更新 ${variables.nodeIds.length} 个节点的标签`)
+      setBatchTagDialogOpen(false)
+      setSelectedNodeIds(new Set())
+      setBatchTag('')
+      setTagFilter('all') // 切换到全部标签
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || '批量更新标签失败')
+    },
+  })
+
   // 创建链式代理节点
   const createRelayNodeMutation = useMutation({
     mutationFn: async ({ sourceNode, targetNode }: { sourceNode: ParsedNode; targetNode: ParsedNode }) => {
@@ -782,6 +820,17 @@ function NodesPage() {
     return counts
   }, [displayNodes])
 
+  // 提取所有唯一的标签
+  const allUniqueTags = useMemo(() => {
+    const tags = new Set<string>()
+    savedNodes.forEach(node => {
+      if (node.tag && node.tag.trim()) {
+        tags.add(node.tag.trim())
+      }
+    })
+    return Array.from(tags).sort()
+  }, [savedNodes])
+
   return (
     <div className='min-h-svh bg-background'>
       <Topbar />
@@ -918,33 +967,84 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                   <div>
                     <CardTitle>节点列表 ({filteredNodes.length})</CardTitle>
                   </div>
-                  {savedNodes.length > 0 && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
+                  <div className='flex gap-2'>
+                    {selectedNodeIds.size > 0 && (
+                      <>
                         <Button
-                          variant='destructive'
+                          variant='default'
                           size='sm'
-                          disabled={clearAllMutation.isPending}
+                          onClick={() => setBatchTagDialogOpen(true)}
                         >
-                          {clearAllMutation.isPending ? '清空中...' : '清空所有'}
+                          批量修改标签 ({selectedNodeIds.size})
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>确认清空所有节点</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            确定要清空所有已保存的节点吗？此操作不可撤销，将删除 {savedNodes.length} 个节点。
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>取消</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleClearAll}>
-                            清空所有
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant='destructive'
+                              size='sm'
+                            >
+                              批量删除 ({selectedNodeIds.size})
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>确认批量删除节点</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                确定要删除选中的 {selectedNodeIds.size} 个节点吗？此操作不可撤销。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => {
+                                  // 批量删除逻辑将在后面实现
+                                  const ids = Array.from(selectedNodeIds)
+                                  Promise.all(ids.map(id => api.delete(`/api/admin/nodes/${id}`)))
+                                    .then(() => {
+                                      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+                                      setSelectedNodeIds(new Set())
+                                      toast.success(`成功删除 ${ids.length} 个节点`)
+                                    })
+                                    .catch((error) => {
+                                      toast.error(error.response?.data?.error || '删除失败')
+                                    })
+                                }}
+                              >
+                                确认删除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
+                    )}
+                    {savedNodes.length > 0 && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant='destructive'
+                            size='sm'
+                            disabled={clearAllMutation.isPending}
+                          >
+                            {clearAllMutation.isPending ? '清空中...' : '清空所有'}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>确认清空所有节点</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              确定要清空所有已保存的节点吗？此操作不可撤销，将删除 {savedNodes.length} 个节点。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClearAll}>
+                              清空所有
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className='space-y-4'>
@@ -984,7 +1084,24 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                       <Button
                         size='sm'
                         variant={tagFilter === 'all' ? 'default' : 'outline'}
-                        onClick={() => setTagFilter('all')}
+                        onClick={() => {
+                          setTagFilter('all')
+                          // 计算应该选中的节点
+                          const nodesToSelect = displayNodes
+                            .filter(n => n.isSaved && n.dbId)
+                            .filter(n => selectedProtocol === 'all' || n.dbNode?.protocol?.toLowerCase() === selectedProtocol)
+                          const nodeIdsToSelect = new Set(nodesToSelect.map(n => n.dbId!))
+
+                          // 如果当前选中的节点和应该选中的节点完全一致，则取消选中
+                          const currentIds = Array.from(selectedNodeIds).sort()
+                          const targetIds = Array.from(nodeIdsToSelect).sort()
+                          if (tagFilter === 'all' && currentIds.length === targetIds.length &&
+                              currentIds.every((id, i) => id === targetIds[i])) {
+                            setSelectedNodeIds(new Set())
+                          } else {
+                            setSelectedNodeIds(nodeIdsToSelect)
+                          }
+                        }}
                       >
                         全部 ({tagCounts.all})
                       </Button>
@@ -993,7 +1110,24 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                           key={tag}
                           size='sm'
                           variant={tagFilter === tag ? 'default' : 'outline'}
-                          onClick={() => setTagFilter(tag)}
+                          onClick={() => {
+                            setTagFilter(tag)
+                            // 计算应该选中的节点
+                            const nodesToSelect = displayNodes
+                              .filter(n => n.isSaved && n.dbId && n.dbNode?.tag === tag)
+                              .filter(n => selectedProtocol === 'all' || n.dbNode?.protocol?.toLowerCase() === selectedProtocol)
+                            const nodeIdsToSelect = new Set(nodesToSelect.map(n => n.dbId!))
+
+                            // 如果当前选中的节点和应该选中的节点完全一致，则取消选中
+                            const currentIds = Array.from(selectedNodeIds).sort()
+                            const targetIds = Array.from(nodeIdsToSelect).sort()
+                            if (tagFilter === tag && currentIds.length === targetIds.length &&
+                                currentIds.every((id, i) => id === targetIds[i])) {
+                              setSelectedNodeIds(new Set())
+                            } else {
+                              setSelectedNodeIds(nodeIdsToSelect)
+                            }
+                          }}
                         >
                           {tag} ({tagCounts[tag]})
                         </Button>
@@ -1007,6 +1141,22 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className='w-[50px]'>
+                          <Checkbox
+                            checked={
+                              filteredNodes.filter(n => n.isSaved && n.dbId).length > 0 &&
+                              filteredNodes.filter(n => n.isSaved && n.dbId).every(n => selectedNodeIds.has(n.dbId!))
+                            }
+                            onCheckedChange={(checked) => {
+                              const savedNodes = filteredNodes.filter(n => n.isSaved && n.dbId)
+                              if (checked) {
+                                setSelectedNodeIds(new Set(savedNodes.map(n => n.dbId!)))
+                              } else {
+                                setSelectedNodeIds(new Set())
+                              }
+                            }}
+                          />
+                        </TableHead>
                         <TableHead className='w-[100px]'>协议</TableHead>
                         <TableHead className='min-w-[150px]'>节点名称</TableHead>
                         <TableHead className='w-[100px]'>标签</TableHead>
@@ -1018,13 +1168,29 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                     <TableBody>
                       {filteredNodes.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className='text-center text-muted-foreground py-8'>
+                          <TableCell colSpan={7} className='text-center text-muted-foreground py-8'>
                             没有找到匹配的节点
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredNodes.map(node => (
                           <TableRow key={node.id}>
+                            <TableCell>
+                              {node.isSaved && node.dbId && (
+                                <Checkbox
+                                  checked={selectedNodeIds.has(node.dbId)}
+                                  onCheckedChange={(checked) => {
+                                    const newSet = new Set(selectedNodeIds)
+                                    if (checked) {
+                                      newSet.add(node.dbId!)
+                                    } else {
+                                      newSet.delete(node.dbId!)
+                                    }
+                                    setSelectedNodeIds(newSet)
+                                  }}
+                                />
+                              )}
+                            </TableCell>
                             <TableCell>
                               {node.parsed ? (
                                 <Badge
@@ -1444,6 +1610,77 @@ trojan://password@example.com:443?sni=example.com#Trojan节点`}
                 暂无可用的节点
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量修改标签对话框 */}
+      <Dialog open={batchTagDialogOpen} onOpenChange={setBatchTagDialogOpen}>
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle>批量修改标签</DialogTitle>
+            <DialogDescription>
+              将为选中的 {selectedNodeIds.size} 个节点修改标签
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            {allUniqueTags.length > 0 && (
+              <div className='space-y-2'>
+                <Label className='text-sm font-medium'>快速选择标签</Label>
+                <div className='flex flex-wrap gap-2'>
+                  {allUniqueTags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant='outline'
+                      className='cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors'
+                      onClick={() => setBatchTag(tag)}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className='space-y-2'>
+              <Label htmlFor='batch-tag-input' className='text-sm font-medium'>
+                标签名称
+              </Label>
+              <Input
+                id='batch-tag-input'
+                placeholder='输入标签名称'
+                value={batchTag}
+                onChange={(e) => setBatchTag(e.target.value)}
+                className='font-mono text-sm'
+              />
+            </div>
+            <div className='flex justify-end gap-2 pt-2'>
+              <Button
+                variant='outline'
+                onClick={() => {
+                  setBatchTagDialogOpen(false)
+                  setBatchTag('')
+                }}
+                disabled={batchUpdateTagMutation.isPending}
+              >
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!batchTag.trim()) {
+                    toast.error('请输入标签名称')
+                    return
+                  }
+                  const nodeIds = Array.from(selectedNodeIds)
+                  batchUpdateTagMutation.mutate({
+                    nodeIds,
+                    tag: batchTag.trim(),
+                  })
+                }}
+                disabled={batchUpdateTagMutation.isPending || !batchTag.trim()}
+              >
+                {batchUpdateTagMutation.isPending ? '保存中...' : '保存'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
