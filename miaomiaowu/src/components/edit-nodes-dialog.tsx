@@ -175,7 +175,7 @@ export function EditNodesDialog({
         {...listeners}
         className='flex items-center gap-2 cursor-move group/title'
       >
-        <GripVertical className='h-3 w-3 text-muted-foreground opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0' />
+        <GripVertical className='h-3 w-3 text-muted-foreground flex-shrink-0' />
         <CardTitle className='text-base truncate'>{groupName}</CardTitle>
       </div>
     )
