@@ -97,6 +97,8 @@ const navItems: NavItem[] = [
     label: '安装',
     icon: Download,
     children: [
+      { id: 'direct-install', label: '直接安装', icon: Download },
+      { id: 'docker-install', label: 'Docker安装', icon: Download },
       { id: 'system-requirements', label: '系统要求', icon: Settings },
       { id: 'client-setup', label: '客户端配置', icon: Settings },
       { id: 'import-subscription', label: '导入订阅', icon: LinkIcon },
@@ -262,7 +264,7 @@ function DocsPage() {
                         </span>
                       )}
                     </button>
-                    {hasChildren && isExpanded && (
+                    {item.children && item.children.length > 0 && isExpanded && (
                       <div className='ml-6 mt-1 space-y-1 border-l-2 border-border/50 pl-2'>
                         {item.children.map((child) => {
                           const ChildIcon = child.icon
@@ -518,7 +520,321 @@ function DocsPage() {
                 </div>
               </section>
 
-              {/* Installation */}
+              {/* Direct Install Section */}
+              <section id='direct-install' className='scroll-mt-20 space-y-6 pt-12'>
+                <h2 className='text-3xl font-bold tracking-tight mb-4 flex items-center gap-3'>
+                  <Download className='size-8 text-primary' />
+                  直接安装
+                </h2>
+
+                <Card className='bg-background/50 backdrop-blur border-border/50'>
+                  <CardContent className='pt-6'>
+                    <p className='text-muted-foreground mb-6'>
+                      直接安装适用于 Linux 系统，支持一键安装脚本和手动二进制部署。
+                    </p>
+
+                    <div className='space-y-6'>
+                      {/* 一键安装 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-blue-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Zap className='size-4' />
+                          一键安装（推荐）
+                        </h3>
+                        <div className='space-y-4 text-sm'>
+                          <div className='bg-destructive/10 rounded-lg p-3 border border-destructive/20'>
+                            <p className='text-destructive font-semibold mb-2'>⚠️ 注意：0.1.1版本修改了服务名称</p>
+                            <p className='text-xs text-muted-foreground mb-3'>无法通过脚本更新，只能重新安装。先执行以下命令卸载及转移数据：</p>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1'>
+                              <div>sudo systemctl stop traffic-info</div>
+                              <div>sudo systemctl disable traffic-info</div>
+                              <div>sudo rm -rf /etc/systemd/system/traffic-info.service</div>
+                              <div>sudo rm -f /usr/local/bin/traffic-info</div>
+                              <div>sudo cp -rf /var/lib/traffic-info/* /etc/mmw/</div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>自动安装为 systemd 服务（Debian/Ubuntu）</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs mb-2'>
+                              curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh | bash
+                            </div>
+                            <p className='text-xs text-muted-foreground'>
+                              安装完成后，服务将自动启动，访问 http://服务器IP:8080 即可
+                            </p>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>更新到最新版本</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs'>
+                              curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/install.sh | sudo bash -s update
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 简易安装 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-purple-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Download className='size-4' />
+                          简易安装（手动运行）
+                        </h3>
+                        <div className='space-y-4 text-sm'>
+                          <div>
+                            <h4 className='font-semibold mb-2'>一键下载安装</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1'>
+                              <div># 下载安装</div>
+                              <div>curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh | bash</div>
+                              <div className='mt-2'># 运行服务</div>
+                              <div>./mmw</div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>更新简易安装版本</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs'>
+                              curl -sL https://raw.githubusercontent.com/Jimleerx/miaomiaowu/main/quick-install.sh | bash -s update
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 二进制文件部署 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-green-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Settings className='size-4' />
+                          二进制文件部署
+                        </h3>
+                        <div className='space-y-4 text-sm'>
+                          <div>
+                            <h4 className='font-semibold mb-2'>Linux</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1'>
+                              <div># 下载二进制文件（修改版本号为所需版本）</div>
+                              <div>wget https://github.com/Jimleerx/miaomiaowu/releases/download/v0.0.2/mmw-linux-amd64</div>
+                              <div className='mt-2'># 添加执行权限</div>
+                              <div>chmod +x mmw-linux-amd64</div>
+                              <div className='mt-2'># 运行</div>
+                              <div>./mmw-linux-amd64</div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>Windows</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1'>
+                              <div># 从 Releases 页面下载 mmw-windows-amd64.exe</div>
+                              <div># https://github.com/Jimleerx/miaomiaowu/releases</div>
+                              <div className='mt-2'># 双击运行或在命令行中执行</div>
+                              <div>.\\mmw-windows-amd64.exe</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 注意事项 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-orange-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Shield className='size-4' />
+                          注意事项
+                        </h3>
+                        <ul className='space-y-2 text-sm text-muted-foreground'>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>数据备份</strong>：安装前建议备份现有数据</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>端口占用</strong>：确保 8080 端口未被占用</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>防火墙</strong>：需要开放 8080 端口</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>首次访问</strong>：首次访问会显示初始化页面，设置管理员账号</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+
+              {/* Docker Install Section */}
+              <section id='docker-install' className='scroll-mt-20 space-y-6 pt-12'>
+                <h2 className='text-3xl font-bold tracking-tight mb-4 flex items-center gap-3'>
+                  <Download className='size-8 text-primary' />
+                  Docker 安装
+                </h2>
+
+                <Card className='bg-background/50 backdrop-blur border-border/50'>
+                  <CardContent className='pt-6'>
+                    <p className='text-muted-foreground mb-6'>
+                      使用 Docker 是最简单快捷的部署方式，无需配置任何依赖环境。推荐生产环境使用。
+                    </p>
+
+                    <div className='space-y-6'>
+                      {/* 基础部署 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-blue-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Zap className='size-4' />
+                          基础部署
+                        </h3>
+                        <div className='space-y-4 text-sm'>
+                          <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1'>
+                            <div>docker run -d \</div>
+                            <div className='ml-2'>--user root \</div>
+                            <div className='ml-2'>-v $(pwd)/mmw-data:/app/data \</div>
+                            <div className='ml-2'>-v $(pwd)/subscribes:/app/subscribes \</div>
+                            <div className='ml-2'>-v $(pwd)/rule_templates:/app/rule_templates \</div>
+                            <div className='ml-2'>--name miaomiaowu \</div>
+                            <div className='ml-2'>-p 8080:8080 \</div>
+                            <div className='ml-2'>ghcr.io/jimleerx/miaomiaowu:latest</div>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>参数说明</h4>
+                            <ul className='space-y-1 text-xs text-muted-foreground ml-4'>
+                              <li>• <code className='bg-muted px-1 rounded'>-p 8080:8080</code> - 端口映射，按需调整</li>
+                              <li>• <code className='bg-muted px-1 rounded'>-v $(pwd)/mmw-data:/app/data</code> - 持久化数据库</li>
+                              <li>• <code className='bg-muted px-1 rounded'>-v $(pwd)/subscribes:/app/subscribes</code> - 订阅文件目录</li>
+                              <li>• <code className='bg-muted px-1 rounded'>-v $(pwd)/rule_templates:/app/rule_templates</code> - 规则模板目录</li>
+                              <li>• <code className='bg-muted px-1 rounded'>-e JWT_SECRET=your-secret</code> - JWT密钥（建议自定义）</li>
+                            </ul>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>更新镜像</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1'>
+                              <div>docker pull ghcr.io/jimleerx/miaomiaowu:latest</div>
+                              <div>docker stop miaomiaowu && docker rm miaomiaowu</div>
+                              <div className='text-muted-foreground'># 然后重新运行上方的启动命令</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Docker Compose */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-purple-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Settings className='size-4' />
+                          Docker Compose 部署（推荐）
+                        </h3>
+                        <div className='space-y-4 text-sm'>
+                          <p className='text-muted-foreground'>创建 <code className='bg-muted px-1.5 py-0.5 rounded'>docker-compose.yml</code> 文件：</p>
+
+                          <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-1 overflow-x-auto'>
+                            <div>version: '3.8'</div>
+                            <div className='mt-2'>services:</div>
+                            <div className='ml-2'>miaomiaowu:</div>
+                            <div className='ml-4'>image: ghcr.io/jimleerx/miaomiaowu:latest</div>
+                            <div className='ml-4'>container_name: miaomiaowu</div>
+                            <div className='ml-4'>restart: unless-stopped</div>
+                            <div className='ml-4'>user: root</div>
+                            <div className='ml-4 mt-2'>environment:</div>
+                            <div className='ml-6'>- PORT=8080</div>
+                            <div className='ml-6'>- DATABASE_PATH=/app/data/traffic.db</div>
+                            <div className='ml-6'>- LOG_LEVEL=info</div>
+                            <div className='ml-4 mt-2'>ports:</div>
+                            <div className='ml-6'>- "8080:8080"</div>
+                            <div className='ml-4 mt-2'>volumes:</div>
+                            <div className='ml-6'>- ./data:/app/data</div>
+                            <div className='ml-6'>- ./subscribes:/app/subscribes</div>
+                            <div className='ml-6'>- ./rule_templates:/app/rule_templates</div>
+                            <div className='ml-4 mt-2'>healthcheck:</div>
+                            <div className='ml-6'>test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]</div>
+                            <div className='ml-6'>interval: 30s</div>
+                            <div className='ml-6'>timeout: 3s</div>
+                            <div className='ml-6'>start_period: 5s</div>
+                            <div className='ml-6'>retries: 3</div>
+                          </div>
+
+                          <div>
+                            <h4 className='font-semibold mb-2'>常用命令</h4>
+                            <div className='bg-muted/50 rounded p-3 font-mono text-xs space-y-2'>
+                              <div># 启动服务</div>
+                              <div>docker-compose up -d</div>
+                              <div className='mt-2'># 查看日志</div>
+                              <div>docker-compose logs -f</div>
+                              <div className='mt-2'># 停止服务</div>
+                              <div>docker-compose down</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 数据持久化 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-cyan-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Database className='size-4' />
+                          数据持久化说明
+                        </h3>
+                        <div className='space-y-3 text-sm text-muted-foreground'>
+                          <p>容器使用三个数据卷进行数据持久化：</p>
+                          <ul className='space-y-2 ml-4'>
+                            <li>• <code className='bg-muted px-1.5 py-0.5 rounded'>/app/data</code> - 存储 SQLite 数据库文件</li>
+                            <li>• <code className='bg-muted px-1.5 py-0.5 rounded'>/app/subscribes</code> - 存储订阅配置文件</li>
+                            <li>• <code className='bg-muted px-1.5 py-0.5 rounded'>/app/rule_templates</code> - 存储规则文件模板</li>
+                          </ul>
+                          <p className='text-orange-500 font-semibold mt-3'>⚠️ 重要提示：请确保定期备份这些目录的数据</p>
+                        </div>
+                      </div>
+
+                      {/* 常见问题 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-red-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <HelpCircle className='size-4' />
+                          常见问题
+                        </h3>
+                        <div className='space-y-3'>
+                          <div className='bg-background/50 rounded-lg p-3'>
+                            <h4 className='font-semibold text-sm mb-2'>Docker 启动报错 "out of memory (14)"</h4>
+                            <p className='text-xs text-muted-foreground mb-2'>
+                              <strong>问题原因：</strong>数据目录权限不足<br/>
+                              <strong>解决方法：</strong>
+                            </p>
+                            <div className='bg-muted/50 rounded p-2 font-mono text-xs space-y-1'>
+                              <div># 给映射的目录添加权限</div>
+                              <div>chmod -R 777 ./data ./subscribes ./rule_templates</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 注意事项 */}
+                      <div className='bg-muted/30 rounded-lg p-4 border-l-4 border-orange-500'>
+                        <h3 className='font-semibold mb-3 flex items-center gap-2'>
+                          <Shield className='size-4' />
+                          注意事项
+                        </h3>
+                        <ul className='space-y-2 text-sm text-muted-foreground'>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>目录权限</strong>：确保挂载目录有正确的读写权限</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>端口冲突</strong>：确保宿主机 8080 端口未被占用</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>网络访问</strong>：如需外网访问，需配置防火墙和安全组</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>定期备份</strong>：建议定期备份数据卷内容</span>
+                          </li>
+                          <li className='flex items-start gap-2'>
+                            <span className='text-orange-500 mt-1'>⚠</span>
+                            <span><strong>安全建议</strong>：生产环境建议修改 JWT_SECRET 为随机字符串</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+
+              {/* System Requirements Section */}
               <section id='system-requirements' className='scroll-mt-20 space-y-6 pt-12'>
                 <h2 className='text-3xl font-bold tracking-tight mb-4'>系统要求</h2>
 

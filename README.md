@@ -47,6 +47,9 @@ docker run -d \
   --user root \
   --name miaomiaowu \
   -p 8080:8080 \
+  -v $(pwd)/mmw-data:/app/data \
+  -v $(pwd)/subscribes:/app/subscribes \
+  -v $(pwd)/rule_templates:/app/rule_templates \
   ghcr.io/jimleerx/miaomiaowu:latest
 ```
 
