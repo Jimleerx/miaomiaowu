@@ -39,10 +39,10 @@ interface EditNodesDialogProps {
   handleCardDragEnd: (event: any) => void
   handleNodeDragEnd: (groupName: string) => (event: any) => void
   activeGroupTitle: string | null
+  activeCard: ProxyGroup | null
   onConfigureChainProxy?: () => void
   cancelButtonText?: string
   saveButtonText?: string
-  groupTitleTrasnform: string
 }
 
 export function EditNodesDialog({
@@ -71,10 +71,10 @@ export function EditNodesDialog({
   handleCardDragEnd,
   handleNodeDragEnd,
   activeGroupTitle,
+  activeCard,
   onConfigureChainProxy,
   cancelButtonText = '取消',
-  saveButtonText = '保存',
-  groupTitleTrasnform = 'translate(-50%, -225%)'
+  saveButtonText = '保存'
 }: EditNodesDialogProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -233,13 +233,9 @@ export function EditNodesDialog({
         onDragLeave={onDragLeaveGroup}
         onDrop={() => onDrop(group.name)}
       >
-        <CardHeader className='pb-3'>
+        <CardHeader className='pb-3' {...attributes} {...listeners}>
           {/* 顶部居中拖动按钮 */}
-          <div
-            {...attributes}
-            {...listeners}
-            className='flex justify-center -mt-2 mb-2 cursor-move touch-none'
-          >
+          <div className='flex justify-center -mt-2 mb-2 cursor-move touch-none'>
             <div className='group/drag-handle hover:bg-accent rounded-md px-3 py-1 transition-colors'>
               <GripVertical className='h-4 w-4 text-muted-foreground group-hover/drag-handle:text-foreground transition-colors' />
             </div>
@@ -329,12 +325,52 @@ export function EditNodesDialog({
                 </div>
               </SortableContext>
               <DragOverlay dropAnimation={null} style={{ cursor: 'grabbing' }}>
-                {activeGroupTitle ? (
+                {activeCard ? (
+                  <Card className='w-[240px] shadow-2xl opacity-90 pointer-events-none'>
+                    <CardHeader className='pb-3'>
+                      <div className='flex justify-center -mt-2 mb-2'>
+                        <div className='group/drag-handle bg-accent rounded-md px-3 py-1'>
+                          <GripVertical className='h-4 w-4 text-foreground' />
+                        </div>
+                      </div>
+                      <div className='flex items-start justify-between gap-2'>
+                        <div className='flex-1 min-w-0'>
+                          <CardTitle className='text-base truncate'>{activeCard.name}</CardTitle>
+                          <CardDescription className='text-xs'>
+                            {activeCard.type} ({(activeCard.proxies || []).length} 个节点)
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className='space-y-1'>
+                      {(activeCard.proxies || []).slice(0, 3).map((proxy, idx) => (
+                        proxy && (
+                          <div
+                            key={`overlay-${proxy}-${idx}`}
+                            className='flex items-center gap-2 p-2 rounded border bg-background'
+                          >
+                            <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                            <span className='text-sm truncate flex-1'>{proxy}</span>
+                          </div>
+                        )
+                      ))}
+                      {(activeCard.proxies || []).length > 3 && (
+                        <div className='text-xs text-center text-muted-foreground py-1'>
+                          还有 {(activeCard.proxies || []).length - 3} 个节点...
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : activeGroupTitle ? (
                   <div
-                    className='px-3 py-1 rounded-md bg-primary text-primary-foreground shadow-lg text-sm font-medium pointer-events-none'
-                    style={{ transform: groupTitleTrasnform }}
+                    className='flex items-center gap-2 p-2 rounded border bg-background shadow-2xl pointer-events-none'
+                    style={{
+                      transform: 'translate(-50%, -150%)',
+                      transformOrigin: 'top left'
+                    }}
                   >
-                    {activeGroupTitle}
+                    <GripVertical className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                    <span className='text-sm truncate'>{activeGroupTitle}</span>
                   </div>
                 ) : null}
               </DragOverlay>

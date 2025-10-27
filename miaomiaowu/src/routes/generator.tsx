@@ -127,6 +127,7 @@ function SubscriptionGeneratorPage() {
   const [draggedItem, setDraggedItem] = useState<{ proxy: string; sourceGroup: string | null; sourceIndex: number } | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
   const [activeGroupTitle, setActiveGroupTitle] = useState<string | null>(null)
+  const [activeCard, setActiveCard] = useState<{ name: string; type: string; proxies: string[] } | null>(null)
   const [showAllNodes, setShowAllNodes] = useState(true)
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -711,11 +712,21 @@ function SubscriptionGeneratorPage() {
       const groupName = activeId.replace('group-title-', '')
       setDraggedItem({ proxy: groupName, sourceGroup: null, sourceIndex: -1 })
       setActiveGroupTitle(groupName)
+    } else {
+      // 拖动整个卡片
+      const group = proxyGroups.find(g => g.name === activeId)
+      if (group) {
+        setActiveCard(group)
+      }
     }
   }
 
   const handleCardDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
+
+    // 清除拖动状态
+    setActiveCard(null)
+    setActiveGroupTitle(null)
 
     if (!over) {
       if (String(active.id).startsWith('group-title-')) {
@@ -1299,8 +1310,8 @@ function SubscriptionGeneratorPage() {
         handleCardDragEnd={handleCardDragEnd}
         handleNodeDragEnd={handleNodeDragEnd}
         activeGroupTitle={activeGroupTitle}
+        activeCard={activeCard}
         saveButtonText="应用分组"
-        groupTitleTrasnform='translate(-50%, -475%)'
       />
 
       {/* 缺失节点替换对话框 */}

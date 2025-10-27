@@ -101,6 +101,7 @@ function SubscribeFilesPage() {
   const [draggedNode, setDraggedNode] = useState<{ name: string; fromGroup: string | null; fromIndex: number } | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
   const [activeGroupTitle, setActiveGroupTitle] = useState<string | null>(null)
+  const [activeCard, setActiveCard] = useState<{ name: string; type: string; proxies: string[] } | null>(null)
 
   // DND Kit 状态 - 用于卡片排序
   const sensors = useSensors(
@@ -631,11 +632,21 @@ function SubscribeFilesPage() {
       const groupName = activeId.replace('group-title-', '')
       setDraggedNode({ name: groupName, fromGroup: null, fromIndex: -1 })
       setActiveGroupTitle(groupName)
+    } else {
+      // 拖动整个卡片
+      const group = proxyGroups.find(g => g.name === activeId)
+      if (group) {
+        setActiveCard(group)
+      }
     }
   }
 
   const handleCardDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
+
+    // 清除拖动状态
+    setActiveCard(null)
+    setActiveGroupTitle(null)
 
     if (!over) {
       if (String(active.id).startsWith('group-title-')) {
@@ -1402,8 +1413,8 @@ function SubscribeFilesPage() {
         handleCardDragEnd={handleCardDragEnd}
         handleNodeDragEnd={handleNodeDragEnd}
         activeGroupTitle={activeGroupTitle}
+        activeCard={activeCard}
         saveButtonText='应用并保存'
-        groupTitleTrasnform='translate(-50%, -225%)'
       />
     </main>
   )
