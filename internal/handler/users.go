@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/storage"
 )
 
 type userEntry struct {

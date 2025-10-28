@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 
 	"gopkg.in/yaml.v3"
 )
@@ -338,15 +338,90 @@ func reorderYAMLFields(docNode *yaml.Node) {
 	// Add priority fields in order
 	for _, fieldName := range priorityFields {
 		if pair, ok := fieldMap[fieldName]; ok {
+			// Special handling for proxies field: reorder fields inside each proxy
+			if fieldName == "proxies" && pair.value.Kind == yaml.SequenceNode {
+				reorderProxiesArrayFields(pair.value)
+			}
 			newContent = append(newContent, pair.key, pair.value)
 		}
 	}
 
 	// Add remaining fields in their original order
 	for _, pair := range otherFields {
+		// Also handle proxies if they are not in priority fields
+		if pair.key.Value == "proxies" && pair.value.Kind == yaml.SequenceNode {
+			reorderProxiesArrayFields(pair.value)
+		}
 		newContent = append(newContent, pair.key, pair.value)
 	}
 
 	// Replace the content
 	docNode.Content = newContent
+}
+
+// 对proxies的children属性重排序，避免某些客户端导入失败
+func reorderProxiesArrayFields(proxiesNode *yaml.Node) {
+	if proxiesNode.Kind != yaml.SequenceNode {
+		return
+	}
+
+	// 保证首个属性为name
+	proxyPriorityFields := []string{
+		"name",
+		"type",
+		"server",
+		"port",
+	}
+
+	for i := 0; i < len(proxiesNode.Content); i++ {
+		proxyNode := proxiesNode.Content[i]
+		if proxyNode.Kind != yaml.MappingNode {
+			continue
+		}
+
+		type proxyFieldPair struct {
+			key   *yaml.Node
+			value *yaml.Node
+		}
+
+		proxyFieldMap := make(map[string]*proxyFieldPair)
+		var proxyOtherFields []*proxyFieldPair
+
+		for j := 0; j < len(proxyNode.Content); j += 2 {
+			if j+1 >= len(proxyNode.Content) {
+				break
+			}
+			keyNode := proxyNode.Content[j]
+			valueNode := proxyNode.Content[j+1]
+
+			pair := &proxyFieldPair{key: keyNode, value: valueNode}
+
+			isPriority := false
+			for _, pf := range proxyPriorityFields {
+				if keyNode.Value == pf {
+					proxyFieldMap[pf] = pair
+					isPriority = true
+					break
+				}
+			}
+
+			if !isPriority {
+				proxyOtherFields = append(proxyOtherFields, pair)
+			}
+		}
+
+		newProxyContent := make([]*yaml.Node, 0, len(proxyNode.Content))
+
+		for _, fieldName := range proxyPriorityFields {
+			if pair, ok := proxyFieldMap[fieldName]; ok {
+				newProxyContent = append(newProxyContent, pair.key, pair.value)
+			}
+		}
+
+		for _, pair := range proxyOtherFields {
+			newProxyContent = append(newProxyContent, pair.key, pair.value)
+		}
+
+		proxyNode.Content = newProxyContent
+	}
 }

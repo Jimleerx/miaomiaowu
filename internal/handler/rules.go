@@ -11,8 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 )
 
 type RuleEditorHandler struct {

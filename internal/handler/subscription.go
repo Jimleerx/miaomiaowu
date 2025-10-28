@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
-	"traffic-info/internal/substore"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
+	"miaomiaowu/internal/substore"
 
 	"gopkg.in/yaml.v3"
 )

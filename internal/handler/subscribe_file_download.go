@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 )
 
 type subscribeFileDownloadHandler struct {

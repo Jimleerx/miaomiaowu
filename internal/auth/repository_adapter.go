@@ -2,7 +2,7 @@ package auth
 
 import (
 	"context"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/storage"
 )
 
 // RepositoryAdapter adapts storage.TrafficRepository to implement UserRepository interface.

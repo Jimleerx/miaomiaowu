@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 )
 
 type nodesHandler struct {

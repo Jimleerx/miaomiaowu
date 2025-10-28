@@ -17,8 +17,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 )
 
 const bytesPerGigabyte = 1073741824.0
@@ -721,7 +721,7 @@ func (h *TrafficSummaryHandler) fetchBatchTraffic(ctx context.Context, base *url
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "traffic-info/0.1")
+	req.Header.Set("User-Agent", "miaomiaowu/0.1")
 
 	resp, err := h.client.Do(req)
 	if err != nil {

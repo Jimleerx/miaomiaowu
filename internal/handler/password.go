@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"traffic-info/internal/auth"
+	"miaomiaowu/internal/auth"
 )
 
 type changePasswordRequest struct {

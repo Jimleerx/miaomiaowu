@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 )
 
 type userTokenHandler struct {

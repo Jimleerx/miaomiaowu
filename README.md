@@ -234,7 +234,7 @@ chmod +x mmw-linux-amd64
 #### Linux
 ```bash
 # 下载二进制文件
-wget https://github.com/Jimleerx/traffic-info/releases/latest/download/mmw-linux-amd64
+wget https://github.com/Jimleerx/miaomiaowu/releases/latest/download/mmw-linux-amd64
 
 # 添加执行权限
 chmod +x mmw-linux-amd64
@@ -357,16 +357,16 @@ npm run build
 cd miaomiaowu && npm run build && cd ..
 
 # 构建 Linux 版本
-GOOS=linux GOARCH=amd64 go build -o build/traffic-info-linux-amd64 ./cmd/server
+GOOS=linux GOARCH=amd64 go build -o build/mmw-linux-amd64 ./cmd/server
 
 # 构建 Windows 版本
-GOOS=windows GOARCH=amd64 go build -o build/traffic-info-windows-amd64.exe ./cmd/server
+GOOS=windows GOARCH=amd64 go build -o build/mmw-windows-amd64.exe ./cmd/server
 ```
 
 ### 项目结构
 
 ```
-traffic-info/
+miaomiaowutraffic-info/
 ├── cmd/
 │   └── server/          # 服务器入口
 │       ├── main.go      # 主程序
@@ -452,8 +452,8 @@ MIT License
 
 ## 联系方式
 
-- 问题反馈：[GitHub Issues](https://github.com/Jimleerx/traffic-info/issues)
-- 功能建议：[GitHub Discussions](https://github.com/Jimleerx/traffic-info/discussions)
+- 问题反馈：[GitHub Issues](https://github.com/Jimleerx/miaomiaowu/issues)
+- 功能建议：[GitHub Discussions](https://github.com/Jimleerx/miaomiaowu/discussions)
 - 🛠️ vless节点转v2ray时servername没有转换成sni
 ## 更新日志
 ### v0.1.2 (2025-10-27)

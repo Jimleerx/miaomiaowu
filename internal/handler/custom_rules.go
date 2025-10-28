@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/storage"
 
 	"gopkg.in/yaml.v3"
 )

@@ -15,7 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"traffic-info/internal/storage"
+	"miaomiaowu/internal/storage"
 )
 
 type probeSyncHandler struct {

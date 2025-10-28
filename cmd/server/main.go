@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"traffic-info/internal/auth"
-	"traffic-info/internal/handler"
-	"traffic-info/internal/storage"
-	"traffic-info/internal/web"
-	ruletemplates "traffic-info/rule_templates"
-	"traffic-info/subscribes"
+	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/handler"
+	"miaomiaowu/internal/storage"
+	"miaomiaowu/internal/web"
+	ruletemplates "miaomiaowu/rule_templates"
+	"miaomiaowu/subscribes"
 )
 
 const version = "0.1.2"
@@ -125,7 +125,7 @@ func main() {
 	go startTrafficCollector(collectorCtx, trafficHandler)
 
 	go func() {
-		log.Printf("Traffic-Info Server v%s - HTTP server listening on %s", version, addr)
+		log.Printf("miaomiaowu Server v%s - HTTP server listening on %s", version, addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http server failed: %v", err)
 		}
