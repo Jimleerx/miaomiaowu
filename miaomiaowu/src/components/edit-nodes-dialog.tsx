@@ -300,10 +300,30 @@ export function EditNodesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='!max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col' style={{ maxWidth: '95vw', width: '95vw' }}>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {description}
-          </DialogDescription>
+          <div className='flex items-start justify-between gap-4'>
+            <div className='flex-1'>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>
+                {description}
+              </DialogDescription>
+            </div>
+            {/* 拖放到所有代理组的区域 */}
+            <div
+              className={`w-48 h-20 mr-9 border-2 rounded-lg flex items-center justify-center text-sm transition-all ${
+                dragOverGroup === 'all-groups'
+                  ? 'border-primary bg-primary/10 border-solid'
+                  : 'border-dashed border-muted-foreground/30 bg-muted/20'
+              }`}
+              onDragOver={(e) => e.preventDefault()}
+              onDragEnter={() => onDragEnterGroup('all-groups')}
+              onDragLeave={onDragLeaveGroup}
+              onDrop={() => onDrop('all-groups')}
+            >
+              <span className={dragOverGroup === 'all-groups' ? 'text-primary font-medium' : 'text-muted-foreground'}>
+                添加到所有代理组
+              </span>
+            </div>
+          </div>
         </DialogHeader>
         <div className='flex-1 flex gap-4 py-4 min-h-0'>
           {/* 左侧：代理组 - 使用 DND Kit 实现排序 */}

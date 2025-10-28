@@ -833,6 +833,34 @@ function SubscriptionGeneratorPage() {
     if (!draggedItem) return
 
     const updatedGroups = [...proxyGroups]
+
+    // 特殊处理：添加到所有代理组
+    if (targetGroupName === 'all-groups') {
+      const specialNodes = ['♻️ 自动选择', '🚀 节点选择', 'DIRECT', 'REJECT']
+      // 如果拖动的是"可用节点"标题，添加所有可用节点到所有代理组
+      if (draggedItem.proxy === '__AVAILABLE_NODES__') {
+        updatedGroups.forEach(group => {
+          availableProxies.forEach(proxyName => {
+            // 过滤掉特殊节点
+            if (!group.proxies.includes(proxyName) && !specialNodes.includes(proxyName)) {
+              group.proxies.push(proxyName)
+            }
+          })
+        })
+      } else {
+        // 否则，将单个节点添加到所有代理组（排除节点自己同名的组）
+        updatedGroups.forEach(group => {
+          // 防止代理组添加到自己内部
+          if (draggedItem.proxy !== group.name && !group.proxies.includes(draggedItem.proxy)) {
+            group.proxies.push(draggedItem.proxy)
+          }
+        })
+      }
+      setProxyGroups(updatedGroups)
+      handleDragEnd()
+      return
+    }
+
     const toGroupIndex = updatedGroups.findIndex(g => g.name === targetGroupName)
 
     if (toGroupIndex === -1) {

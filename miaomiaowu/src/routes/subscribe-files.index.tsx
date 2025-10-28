@@ -771,6 +771,30 @@ function SubscribeFilesPage() {
 
     const updatedGroups = [...proxyGroups]
 
+    // 特殊处理：添加到所有代理组
+    if (toGroup === 'all-groups') {
+      // 如果拖动的是"可用节点"标题，添加所有可用节点到所有代理组
+      if (draggedNode.name === '__AVAILABLE_NODES__') {
+        updatedGroups.forEach(group => {
+          availableNodes.forEach(nodeName => {
+            if (!group.proxies.includes(nodeName)) {
+              group.proxies.push(nodeName)
+            }
+          })
+        })
+      } else {
+        // 否则，将单个节点添加到所有代理组
+        updatedGroups.forEach(group => {
+          if (!group.proxies.includes(draggedNode.name)) {
+            group.proxies.push(draggedNode.name)
+          }
+        })
+      }
+      setProxyGroups(updatedGroups)
+      handleDragEnd()
+      return
+    }
+
     // 从原来的位置移除（只有从代理组拖动时才移除，从可用节点拖动时不移除）
     if (draggedNode.fromGroup && draggedNode.fromGroup !== 'available' && draggedNode.name !== '__AVAILABLE_NODES__') {
       const fromGroupIndex = updatedGroups.findIndex(g => g.name === draggedNode.fromGroup)
