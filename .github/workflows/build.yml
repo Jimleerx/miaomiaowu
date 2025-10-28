@@ -1,16 +1,6 @@
 name: Build and Release
 
 on:
-  push:
-    branches:
-      - main
-      - open
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
-      - open
   workflow_dispatch:
 
 jobs:
