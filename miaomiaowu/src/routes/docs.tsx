@@ -17,23 +17,16 @@ import {
   ChevronRight,
   Wrench,
   Sparkles,
-  ArrowLeft,
   Github,
-  Sun,
-  Moon,
   ChevronUp,
   Shield,
   Eye,
-  Globe,
-  ArrowRightLeft,
-  Undo2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
 
 // Import client icons
 import clashIcon from '@/assets/icons/clash_color.png'
@@ -135,7 +128,6 @@ function DocsPage() {
   const [activeSection, setActiveSection] = useState('about')
   const [expandedSections, setExpandedSections] = useState<string[]>(['introduction', 'manual', 'advanced'])
   const [showBackToTop, setShowBackToTop] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -143,10 +135,6 @@ function DocsPage() {
     }
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  useEffect(() => {
-    setIsDarkMode(document.documentElement.classList.contains('dark'))
   }, [])
 
   const scrollToSection = (id: string) => {
