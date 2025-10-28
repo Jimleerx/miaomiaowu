@@ -25,6 +25,8 @@
 ### 体验demo
 账户/密码: test / test123
 
+### [使用帮助](https://mmwdemo.2ha.me/docs)
+
 ## 常见问题
 ### docker 启动报错
 failed to initialize traffic repository: enable wal: unable to open database file: out of memory (14)
