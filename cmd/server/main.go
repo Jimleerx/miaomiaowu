@@ -164,6 +164,7 @@ func main() {
 	mux.Handle("/api/subscriptions", auth.RequireToken(tokenStore, handler.NewSubscriptionListHandler(repo)))
 	mux.Handle("/api/dns/resolve", auth.RequireToken(tokenStore, handler.NewDNSHandler()))
 	mux.Handle("/api/subscribe-files", auth.RequireToken(tokenStore, handler.NewSubscribeFilesListHandler(repo)))
+	mux.Handle("/api/convert", auth.RequireToken(tokenStore, handler.NewConvertHandler()))
 
 	// Create subscription handler (shared between endpoint and short links)
 	subscriptionHandler := handler.NewSubscriptionHandlerConcrete(repo, subscribeDir)

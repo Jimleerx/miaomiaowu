@@ -28,7 +28,7 @@ import { Check, Pencil, X, Undo2, Activity, Eye, Copy, ChevronDown, Link2, Flag,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import IpIcon from '@/assets/icons/ip.svg'
 import ExchangeIcon from '@/assets/icons/exchange.svg'
-import URI_Producer from '@/lib/substore/producers/uri'
+import { convertToURI } from '@/lib/api/convert'
 import { countryCodeToFlag, hasRegionEmoji, getGeoIPInfo } from '@/lib/country-flag'
 import { Twemoji } from '@/components/twemoji'
 import { useMediaQuery } from '@/hooks/use-media-query'
@@ -814,9 +814,8 @@ function NodesPage() {
       // 解析 Clash 配置
       const clashConfig = JSON.parse(node.clash_config)
 
-      // 使用 URI producer 转换为 URI
-      const producer = URI_Producer()
-      const uri = producer.produce(clashConfig)
+      // 调用后端 API 转换为 URI
+      const uri = await convertToURI(clashConfig)
 
       // 尝试复制到剪贴板
       try {
