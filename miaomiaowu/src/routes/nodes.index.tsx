@@ -23,7 +23,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { parseProxyUrl, toClashProxy, type ProxyNode, type ClashProxy } from '@/lib/proxy-parser'
+import { parseProxyUrl, toClashProxy, fromClashProxy, type ProxyNode, type ClashProxy } from '@/lib/proxy-parser'
+import yaml from 'js-yaml'
 import { Check, Pencil, X, Undo2, Activity, Eye, Copy, ChevronDown, Link2, Flag, GripVertical, Zap, Loader2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import IpIcon from '@/assets/icons/ip.svg'
@@ -1765,6 +1766,54 @@ function NodesPage() {
   })
 
   const handleParse = () => {
+    // 尝试解析 YAML
+    try {
+      const trimmedInput = input.trim()
+      if (trimmedInput.startsWith('-') || trimmedInput.includes('proxies:')) {
+        const parsedYaml = yaml.load(input)
+        let proxies: any[] = []
+
+        if (Array.isArray(parsedYaml)) {
+          proxies = parsedYaml
+        } else if (parsedYaml && typeof parsedYaml === 'object' && Array.isArray((parsedYaml as any).proxies)) {
+          proxies = (parsedYaml as any).proxies
+        }
+
+        if (proxies.length > 0) {
+          const parsedTempNodes: TempNode[] = []
+          for (const proxy of proxies) {
+            // Ensure it looks like a proxy
+            if (!proxy.name || !proxy.server || !proxy.port || !proxy.type) continue
+
+            const name = proxy.name
+            const clashNode = proxy as ClashProxy
+            const parsedNode = fromClashProxy(clashNode)
+            const normalizedParsed = cloneProxyWithName(parsedNode, name)
+            const normalizedClash = cloneProxyWithName(clashNode, name)
+
+            parsedTempNodes.push({
+              id: Math.random().toString(36).substring(7),
+              rawUrl: JSON.stringify(proxy), // Use JSON as rawUrl
+              name,
+              parsed: normalizedParsed,
+              clash: normalizedClash,
+              enabled: true,
+              tag: manualTag.trim() || '手动输入',
+            })
+          }
+
+          if (parsedTempNodes.length > 0) {
+            setTempNodes(parsedTempNodes)
+            setCurrentTag('manual')
+            toast.success(`成功解析 ${parsedTempNodes.length} 个节点`)
+            return
+          }
+        }
+      }
+    } catch (e) {
+      console.error('YAML parse failed', e)
+    }
+
     const lines = input.split('\n').filter(line => line.trim())
     const parsed: TempNode[] = []
 
@@ -1788,8 +1837,14 @@ function NodesPage() {
       })
     }
 
+    if (parsed.length === 0) {
+      toast.error('未能解析出有效节点，请检查格式')
+      return
+    }
+
     setTempNodes(parsed)
     setCurrentTag('manual') // 手动输入
+    toast.success(`成功解析 ${parsed.length} 个节点`)
   }
 
   const handleSave = () => {
