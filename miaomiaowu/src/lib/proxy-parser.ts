@@ -1382,6 +1382,111 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
 }
 
 /**
+ * 将 Clash 节点格式转换为通用代理节点格式
+ */
+export function fromClashProxy(clash: ClashProxy): ProxyNode {
+  const node: ProxyNode = {
+    name: clash.name,
+    type: clash.type,
+    server: clash.server,
+    port: clash.port
+  }
+
+  // 基础字段映射
+  if (clash.uuid) node.uuid = clash.uuid as string
+  if (clash.password) node.password = clash.password as string
+  if (clash.cipher) node.cipher = clash.cipher as string
+  if (clash.udp !== undefined) node.udp = clash.udp as boolean
+  if (clash.tfo !== undefined) node.tfo = clash.tfo as boolean
+
+  // TLS 相关
+  if (clash.tls) node.tls = clash.tls as boolean
+  if (clash['skip-cert-verify'] !== undefined) {
+    node.skipCertVerify = clash['skip-cert-verify'] as boolean
+  }
+  if (clash.servername) node.servername = clash.servername as string
+  if (clash.sni) node.sni = clash.sni as string // 某些客户端可能使用 sni
+  if (clash.alpn) node.alpn = clash.alpn as string[]
+  if (clash.fingerprint) node.fingerprint = clash.fingerprint as string
+
+  // Client Fingerprint
+  if (clash['client-fingerprint']) {
+    node.fp = clash['client-fingerprint'] as string
+    node['client-fingerprint'] = clash['client-fingerprint'] as string
+  }
+
+  // Network / Transport
+  if (clash.network) node.network = clash.network as string
+  
+  // WS Opts
+  if (clash['ws-opts']) node['ws-opts'] = clash['ws-opts']
+  if (clash['ws-path']) { // 兼容旧格式
+    node['ws-opts'] = { ...(node['ws-opts'] as Record<string, unknown> || {}), path: clash['ws-path'] as string }
+  }
+  if (clash['ws-headers']) { // 兼容旧格式
+    node['ws-opts'] = { ...(node['ws-opts'] as Record<string, unknown> || {}), headers: clash['ws-headers'] as Record<string, string> }
+  }
+
+  // H2 Opts
+  if (clash['h2-opts']) node['h2-opts'] = clash['h2-opts']
+  
+  // GRPC Opts
+  if (clash['grpc-opts']) node['grpc-opts'] = clash['grpc-opts']
+  if (clash['grpc-service-name']) { // 兼容旧格式
+    node['grpc-opts'] = { ...(node['grpc-opts'] as Record<string, unknown> || {}), 'grpc-service-name': clash['grpc-service-name'] as string }
+  }
+
+  // Reality Opts
+  if (clash['reality-opts']) {
+    const reality = clash['reality-opts'] as Record<string, unknown>
+    node.security = 'reality'
+    if (reality['public-key']) {
+      node['public-key'] = reality['public-key'] as string
+      node.pbk = reality['public-key'] as string
+    }
+    if (reality['short-id']) {
+      node['short-id'] = reality['short-id'] as string
+      node.sid = reality['short-id'] as string
+    }
+    if (reality['spider-x']) {
+      node['spider-x'] = reality['spider-x'] as string
+      node.spx = reality['spider-x'] as string
+    }
+  }
+
+  // VLESS Flow
+  if (clash.flow) node.flow = clash.flow as string
+  if (clash.encryption) node.encryption = clash.encryption as string
+
+  // Hysteria/Hysteria2 Specific
+  if (clash.up) node.up = clash.up as string
+  if (clash.down) node.down = clash.down as string
+  if (clash['obfs-password']) node['obfs-password'] = clash['obfs-password'] as string
+  if (clash.obfs) node.obfs = clash.obfs as string
+
+  // SS Plugin
+  if (clash.plugin) node.plugin = clash.plugin as string
+  if (clash['plugin-opts']) node['plugin-opts'] = clash['plugin-opts']
+
+  // WireGuard Specific
+  if (clash.ip) node.ip = clash.ip as string
+  if (clash.ipv6) node.ipv6 = clash.ipv6 as string
+  if (clash['private-key']) node['private-key'] = clash['private-key'] as string
+  if (clash['public-key']) node['public-key'] = clash['public-key'] as string
+  if (clash['pre-shared-key']) node['pre-shared-key'] = clash['pre-shared-key'] as string
+  if (clash.mtu) node.mtu = clash.mtu as number
+
+  // Copy other fields
+  for (const [key, value] of Object.entries(clash)) {
+    if (!node[key] && value !== undefined) {
+      node[key] = value
+    }
+  }
+
+  return node
+}
+
+/**
  * 解析订阅内容（多个代理 URL，每行一个或 base64 编码）
  */
 export function parseSubscription(content: string): ClashProxy[] {
