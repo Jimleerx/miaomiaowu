@@ -1980,6 +1980,11 @@ function NodesPage() {
       })
     }
 
+    if (parsed.length === 0) {
+      toast.error('未能解析出有效节点，请检查格式')
+      return
+    }
+
     setTempNodes(parsed)
     setCurrentTag('manual') // 手动输入
     if (parsed.length > 0) {
